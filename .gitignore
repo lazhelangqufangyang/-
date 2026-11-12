@@ -1,0 +1,9 @@
+node_modules/
+dist/
+backend/target/
+qa/*.mjs
+qa/last.txt
+.idea/
+server/.env
+*.tsbuildinfo
+.DS_Store

@@ -1,0 +1,25 @@
+{
+  "name": "fitness-planner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/gen-icons.mjs && vite build",
+    "preview": "vite preview --port 8082",
+    "api": "java -jar backend/target/fitplan-api.jar",
+    "api:build": "mvn -f backend/pom.xml -s backend/settings.xml -DskipTests package",
+    "tunnel": "D:/Tools/cloudflared.exe tunnel --no-autoupdate --url http://127.0.0.1:8787"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
