@@ -40,6 +40,7 @@ export function initialState() {
         version: 1,
         profile: emptyProfile(),
         framework: null,
+        weekPlan: null,
         sheets: [],
         setLogs: [],
         settings: defaultSettings(),
@@ -90,6 +91,7 @@ export function loadState() {
             version: 1,
             profile: cleanProfile(parsed.profile),
             settings: { ...defaultSettings(), ...(parsed.settings ?? {}) },
+            weekPlan: cleanWeekPlan(parsed.weekPlan),
             sheets: (parsed.sheets ?? []).map(cleanSheet),
             setLogs: parsed.setLogs ?? []
         };
@@ -104,6 +106,7 @@ function slim(state) {
         version: state.version,
         profile: state.profile,
         framework: state.framework,
+        weekPlan: state.weekPlan ?? null,
         sheets: state.sheets,
         setLogs: state.setLogs,
         settings: state.settings,
@@ -137,6 +140,7 @@ export function parseImported(json) {
         version: 1,
         profile: cleanProfile(raw.profile),
         settings: { ...defaultSettings(), ...(raw.settings ?? {}), apiKey: raw.settings?.apiKey ?? '' },
+        weekPlan: cleanWeekPlan(raw.weekPlan),
         sheets: Array.isArray(raw.sheets) ? raw.sheets.map(cleanSheet) : [],
         setLogs: Array.isArray(raw.setLogs) ? raw.setLogs.filter(isSetLog).map(cleanSetLog) : []
     };
@@ -156,6 +160,20 @@ function cleanSetLog(l) {
             .slice(0, 3)
         : [];
     return { ...l, dropSteps: steps.length ? steps : undefined };
+}
+/** 老存档没有周计划层；手改的 JSON 里日期键或动作列表不成形就整层丢掉，进页时会自动重排 */
+function cleanWeekPlan(w) {
+    if (!w || typeof w !== 'object' || typeof w.weekStart !== 'string' || !w.days || typeof w.days !== 'object' || Array.isArray(w.days))
+        return null;
+    const days = {};
+    for (const [date, d] of Object.entries(w.days)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+            continue;
+        days[date] = d && typeof d === 'object' && Array.isArray(d.exerciseIds)
+            ? { ...d, exerciseIds: d.exerciseIds.filter((x) => typeof x === 'string') }
+            : null;
+    }
+    return { weekStart: w.weekStart, key: typeof w.key === 'string' ? w.key : '', days };
 }
 /** 老存档的表没有 skipped 这个字段；里面的 id 不在表上了就当作没标 */
 function cleanSheet(s) {

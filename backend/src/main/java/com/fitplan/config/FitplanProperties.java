@@ -14,8 +14,17 @@ public class FitplanProperties {
     private String publicBase = "";
     private String origins = "";
     private int sessionDays = 30;
+    private boolean healthDetail = false;
     private final Alipay alipay = new Alipay();
     private final Pay pay = new Pay();
+
+    public boolean isHealthDetail() {
+        return healthDetail;
+    }
+
+    public void setHealthDetail(boolean healthDetail) {
+        this.healthDetail = healthDetail;
+    }
 
     public int getApiPort() {
         return apiPort;

@@ -47,17 +47,43 @@ export function receiptText(receipt) {
 export function cloudToState(cloud, local) {
     return parseImported(JSON.stringify({ ...cloud, version: 1, onboardingDone: cloud.onboarded, settings: local.settings }));
 }
-export function pushRecords(state) {
-    return requestJson('/data/sync', {
+/**
+ * 云端这一份的时间戳留在本机：下一次「传到云端」要把它带回后端，
+ * 后端拿它跟库里那份比一眼，就知道这两台设备里是不是有一台在拿旧覆盖新的。
+ */
+const STAMP_KEY = 'fitplan.cloud';
+export function cloudStamp() {
+    return (localStorage.getItem(STAMP_KEY) ?? '').trim();
+}
+function rememberStamp(iso) {
+    if (iso)
+        localStorage.setItem(STAMP_KEY, iso);
+    else
+        localStorage.removeItem(STAMP_KEY);
+}
+export function pushRecords(state, force = false) {
+    const q = [];
+    if (cloudStamp())
+        q.push(`stamp=${encodeURIComponent(cloudStamp())}`);
+    if (force)
+        q.push('force=1');
+    return requestJson(`/data/sync${q.length ? `?${q.join('&')}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify(payloadOf(state))
+    }).then((receipt) => {
+        rememberStamp(receipt.syncedAt);
+        return receipt;
     });
 }
 export async function pullRecords(local) {
     const cloud = await requestJson('/data');
+    rememberStamp(cloud.syncedAt);
     return cloudToState(cloud, local);
 }
 export function clearCloudRecords() {
-    return requestJson('/data', { method: 'DELETE' });
+    return requestJson('/data', { method: 'DELETE' }).then((res) => {
+        rememberStamp('');
+        return res;
+    });
 }

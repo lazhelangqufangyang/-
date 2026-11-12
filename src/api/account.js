@@ -66,8 +66,11 @@ export async function requestJson(path, init) {
         throw new Error(`连不上后端（${apiBase()}）：${e.message}`);
     }
     const body = (await res.json().catch(() => null));
-    if (!res.ok)
-        throw new Error(body?.error ?? `后端返回 ${res.status}`);
+    if (!res.ok) {
+        const err = new Error(body?.error ?? `后端返回 ${res.status}`);
+        err.status = res.status;
+        throw err;
+    }
     return body;
 }
 export function checkHealth() {

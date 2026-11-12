@@ -2,16 +2,24 @@ import { RPE_LABELS, RPE_STEPS, RPE_TOP, rpeAt, rpeIndex } from '../engine/rpe.j
 
 const SPARK_COLORS = ['#12a3a8', '#d6379f', '#6b4fd0', '#4a2fa8', '#d97a12', '#e0356f'];
 const FILL_STOPS = [0, 30, 60, 90, 100];
-/** 四档底色：越往后越烫，从淡粉一路推到橙红 */
-const FILL_PALETTES = [
-    [[255, 230, 234], [255, 208, 216], [252, 174, 190], [246, 144, 164], [240, 124, 146]],
-    [[255, 226, 230], [255, 199, 209], [252, 155, 172], [246, 116, 138], [240, 92, 116]],
-    [[255, 222, 226], [255, 189, 199], [252, 134, 152], [244, 92, 114], [238, 64, 90]],
-    [[255, 216, 216], [255, 178, 182], [252, 114, 126], [244, 66, 86], [255, 108, 62]]
+/** 6–7.5 松石绿、8–8.5 琥珀、9–9.5 真红、10 紫：四个色族，隔着半档也认得出 */
+export const EFFORT_TONES = [
+    { stops: [[230, 251, 246], [201, 245, 234], [156, 234, 218], [99, 220, 198], [47, 199, 174]], body: [127, 227, 205], edge: [11, 107, 92], ink: '#0a6b5b', border: '#cfe9e2' },
+    { stops: [[224, 250, 244], [190, 243, 231], [140, 231, 213], [84, 214, 192], [34, 190, 166]], body: [110, 222, 196], edge: [10, 97, 82], ink: '#0a6b5b', border: '#cfe9e2' },
+    { stops: [[219, 249, 242], [180, 241, 228], [124, 227, 208], [66, 208, 186], [20, 181, 157]], body: [92, 216, 187], edge: [8, 87, 74], ink: '#0a6b5b', border: '#cfe9e2' },
+    { stops: [[214, 248, 240], [170, 239, 225], [108, 223, 203], [48, 201, 179], [8, 172, 148]], body: [74, 210, 178], edge: [6, 77, 66], ink: '#0a6b5b', border: '#cfe9e2' },
+    { stops: [[255, 244, 224], [255, 232, 196], [255, 214, 150], [252, 190, 88], [245, 166, 35]], body: [255, 196, 107], edge: [138, 75, 6], ink: '#8a4b06', border: '#f6e2c1' },
+    { stops: [[255, 240, 214], [255, 224, 178], [255, 201, 124], [250, 173, 54], [238, 146, 16]], body: [255, 178, 64], edge: [122, 63, 4], ink: '#8a4b06', border: '#f6e2c1' },
+    { stops: [[255, 232, 235], [255, 209, 215], [252, 170, 182], [246, 116, 136], [232, 58, 86]], body: [255, 143, 163], edge: [122, 18, 38], ink: '#b8253a', border: '#f6d6dc' },
+    { stops: [[255, 226, 229], [255, 196, 204], [250, 148, 163], [240, 84, 108], [214, 32, 62]], body: [255, 111, 136], edge: [109, 15, 34], ink: '#b8253a', border: '#f6d6dc' },
+    { stops: [[243, 238, 255], [230, 220, 255], [206, 186, 252], [170, 130, 246], [131, 81, 255]], body: [168, 132, 246], edge: [74, 42, 150], ink: '#6b3fd0', border: '#cdbaf7' }
 ];
+const UNSET_TONE = { body: [222, 215, 230], edge: [167, 159, 181], ink: '#5d5568', border: '#ece7f2' };
 const THUMB_R = 16;
 const CELL = 6;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const mix = (a, b, k) => a.map((c, i) => Math.round(c + (b[i] - c) * k));
+const rgb = (c) => `rgb(${c.join(',')})`;
 const hash = (n) => {
     const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
     return v - Math.floor(v);
@@ -148,25 +156,29 @@ export function mountEffortMotion(host, { onChange }) {
             layer.style.opacity = String(reveal);
             layer.style.setProperty('--es-fiber-hidden', String(1 - reveal));
         });
+        const x = t * RPE_TOP;
+        const lo = Math.min(RPE_TOP - 1, Math.floor(x));
+        const k = x - lo;
+        const a = EFFORT_TONES[lo];
+        const b = EFFORT_TONES[lo + 1];
+        const near = EFFORT_TONES[Math.min(RPE_TOP, Math.round(x))];
         thumb.style.left = `${THUMB_R + t * travel}px`;
         thumb.style.transform = `translate(-50%, -50%) scale(${1 + g * 0.2 + burst * 0.16})`;
-        muscle.style.setProperty('--es-muscle-fill', g > 0.01
-            ? `rgb(${Math.round(255 - 87 * g)},${Math.round(143 - 11 * g)},${Math.round(163 + 83 * g)})`
-            : '#ff8fa3');
-        muscle.style.setProperty('--es-muscle-edge', g > 0.01
-            ? `rgb(${Math.round(122 - 48 * g)},${Math.round(18 + 24 * g)},${Math.round(38 + 112 * g)})`
-            : '#7a1226');
+        muscle.style.setProperty('--es-muscle-fill', rgb(unset ? UNSET_TONE.body : mix(a.body, b.body, k)));
+        muscle.style.setProperty('--es-muscle-edge', rgb(unset ? UNSET_TONE.edge : mix(a.edge, b.edge, k)));
+        host.style.setProperty('--es-ink', unset ? UNSET_TONE.ink : near.ink);
+        host.style.setProperty('--es-border', unset ? UNSET_TONE.border : near.border);
+        const heat = unset ? 0 : clamp((t - 0.62) / 0.38, 0, 1);
         thumb.style.filter = g > 0.01
-            ? `drop-shadow(0 0 ${3 + burst * 7}px rgba(255,77,109,0.9)) drop-shadow(0 0 ${7 + burst * 11}px rgba(131,81,255,0.45))`
-            : 'none';
+            ? `drop-shadow(0 0 ${3 + burst * 7}px rgba(214,55,159,0.85)) drop-shadow(0 0 ${7 + burst * 11}px rgba(131,81,255,0.5))`
+            : heat > 0.01
+                ? `drop-shadow(0 0 ${2 + heat * 3}px rgba(232,58,86,${(0.16 + heat * 0.3).toFixed(2)}))`
+                : 'none';
         const at = THUMB_R + t * travel;
         fill.style.width = `${at}px`;
         fill.style.opacity = String((1 - g) * (unset ? 0.35 : 1));
         pixels.style.opacity = String(g);
-        const tint = clamp(t * 3.4 - 0.2, 0, 3);
-        const pi = Math.min(2, Math.floor(tint));
-        const blend = tint - pi;
-        fill.style.backgroundImage = `linear-gradient(90deg, ${FILL_PALETTES[pi].map((rgb, i) => `rgb(${rgb.map((c, k) => Math.round(c + (FILL_PALETTES[pi + 1][i][k] - c) * blend)).join(',')}) ${FILL_STOPS[i]}%`).join(', ')})`;
+        fill.style.backgroundImage = `linear-gradient(90deg, ${a.stops.map((stop, i) => `${rgb(mix(stop, b.stops[i], k))} ${FILL_STOPS[i]}%`).join(', ')})`;
         const shake = media.matches ? 0 : g * (0.2 + Math.exp(-age * 7) * 1.4);
         host.style.transform = shake ? `translate(${Math.sin(clock * 93) * shake}px,${Math.cos(clock * 117) * shake * 0.65}px)` : 'none';
         drawPixels(clock, g);

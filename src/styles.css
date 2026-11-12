@@ -2164,75 +2164,6 @@ textarea {
   font-size: 13.5px;
 }
 
-/* ---------- 打开时的照片页，停两秒 ---------- */
-.splash {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 54px);
-  background: #170d13;
-  overflow: hidden;
-  animation: splash-out 0.3s ease 2s forwards;
-}
-
-/* 照片按屏宽整幅放进来：横向一点不裁，下缘和左右化进底色 */
-.splash::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 107vw;
-  background: url('/splash.jpg') top center / 100% auto no-repeat;
-  -webkit-mask-image: linear-gradient(180deg, #000 62%, rgba(0, 0, 0, 0.42) 86%, transparent 100%),
-    radial-gradient(104% 74% at 50% 42%, #000 62%, rgba(0, 0, 0, 0.55) 100%);
-  -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(180deg, #000 62%, rgba(0, 0, 0, 0.42) 86%, transparent 100%),
-    radial-gradient(104% 74% at 50% 42%, #000 62%, rgba(0, 0, 0, 0.55) 100%);
-  mask-composite: intersect;
-}
-
-/* 下缘压深，标语落在暗处 */
-.splash::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(23, 13, 19, 0.24) 0%, rgba(23, 13, 19, 0) 22%, rgba(23, 13, 19, 0.7) 62%, rgba(23, 13, 19, 0.92) 100%);
-}
-
-.splash-brand,
-.splash-sub {
-  position: relative;
-  z-index: 1;
-}
-
-.splash-brand {
-  font-size: 76px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 2px;
-  color: #fff;
-}
-
-.splash-sub {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 4px;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-@keyframes splash-out {
-  to {
-    opacity: 0;
-    visibility: hidden;
-  }
-}
-
 /* ---------- 第一次进来的那一屏 ---------- */
 .welcome {
   position: relative;
@@ -2672,7 +2603,7 @@ textarea {
   overflow: hidden;
   margin: 2px 0 8px;
   padding: 8px 10px 6px;
-  border: 1px solid #ece7f2;
+  border: 1px solid var(--es-border, #ece7f2);
   border-radius: 12px;
   background: #ffffff;
   color: #1d1826;
@@ -2714,7 +2645,8 @@ textarea {
   font-weight: 760;
   line-height: 1.1;
   letter-spacing: -0.3px;
-  color: #1d1826;
+  color: var(--es-ink, #1d1826);
+  transition: color 220ms ease;
 }
 
 .es[data-unset='true'] .es-value {
@@ -2725,11 +2657,8 @@ textarea {
   display: inline-flex;
   min-width: 56px;
   font-size: 12px;
-  color: #5d5568;
-}
-
-.es[data-level='galaxy'] .es-label {
-  color: #6b3fd0;
+  color: var(--es-ink, #5d5568);
+  transition: color 220ms ease;
 }
 
 .es-letter {
@@ -2755,7 +2684,7 @@ textarea {
 }
 
 .es-control:focus-visible {
-  outline: 2px solid #8b5cf6;
+  outline: 2px solid var(--es-ink, #8b5cf6);
   outline-offset: 2px;
 }
 
@@ -2772,7 +2701,7 @@ textarea {
   position: absolute;
   inset: 0 auto 0 0;
   width: 16px;
-  background: linear-gradient(90deg, #ffe6ea 0%, #ffd0d8 30%, #fcaabe 60%, #f690a4 90%, #f07c92 100%);
+  background: linear-gradient(90deg, #e6fbf6 0%, #c9f5ea 30%, #9ceada 60%, #63dcc6 90%, #2fc7ae 100%);
 }
 
 .es-pixels {
@@ -2823,8 +2752,8 @@ textarea {
   width: 32px;
   height: 32px;
   overflow: visible;
-  --es-muscle-fill: #ff8fa3;
-  --es-muscle-edge: #7a1226;
+  --es-muscle-fill: #ded7e6;
+  --es-muscle-edge: #a79fb5;
 }
 
 .es-muscle path {
@@ -2889,5 +2818,472 @@ textarea {
 
   .es-thumb {
     will-change: auto;
+  }
+}
+
+/* 删一组点第二次才真删：那颗 ✕ 变成「确认删」时的样子 */
+.set-cut.on {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-bottom-color: var(--danger);
+  font-weight: 660;
+  font-size: 12.5px;
+}
+
+/* 云端那份比本机新时那一句，跟两个选择 */
+.conflict {
+  margin-top: 10px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-soft);
+  border-radius: 12px;
+  padding: 9px 11px;
+}
+
+.conflict .missing {
+  margin: 0 0 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--text);
+}
+
+/* 本周计划板：日期轨 + 当天详情 + 编辑态的会话卡片 */
+.pb-rail {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.pb-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px rgba(22, 24, 29, 0.04);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.pb-wd {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.pb-num {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.pb-role {
+  max-width: 100%;
+  padding: 0 3px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pb-cell.today {
+  border-color: var(--accent-line);
+}
+
+.pb-cell.today .pb-num {
+  color: var(--accent-deep);
+}
+
+.pb-cell.sel {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.pb-cell.rest {
+  background: var(--bg-sunken);
+  opacity: 0.62;
+}
+
+.pb-cell.over {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(232, 72, 92, 0.18);
+  opacity: 1;
+}
+
+.pb-cell.src {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.pb-day {
+  margin-top: 10px;
+}
+
+.pb-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pb-day-head b {
+  font-size: 16px;
+}
+
+.pb-day-note {
+  margin: 6px 0 2px;
+}
+
+.pb-day-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pb-day-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.pb-i {
+  width: 18px;
+  flex: none;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.pb-day-row b {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.pb-day-row .num {
+  font-size: 12.5px;
+}
+
+.pb-bar {
+  margin-top: 12px;
+}
+
+.pb-hint {
+  margin: 2px 0 8px;
+}
+
+.pb-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pb-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: 0 1px 3px rgba(22, 24, 29, 0.06);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: box-shadow 160ms ease, opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.pb-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  box-shadow: 0 6px 16px rgba(22, 24, 29, 0.1);
+}
+
+.pb-card:active {
+  cursor: grabbing;
+}
+
+/* 编辑态：日期轨吸顶当落区，滚到第几张卡片都拖得回本周任何一天 */
+.pb.edit .pb-rail {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: -8px 0 0;
+  padding: 8px 0 8px;
+  background: var(--bg);
+  box-shadow: 0 8px 14px -10px rgba(22, 24, 29, 0.18);
+}
+
+.pb.edit .pb-cell {
+  border-style: dashed;
+  border-color: var(--accent-line);
+}
+
+.pb.edit .pb-cell.over {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.pb-grip {
+  margin-left: auto;
+  flex: none;
+  width: 10px;
+  height: 18px;
+  background-image: radial-gradient(circle, var(--text-faint) 1.3px, transparent 1.4px);
+  background-size: 5px 6px;
+  background-position: 0 0;
+  opacity: 0.85;
+}
+
+.pb-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pb-card-head b {
+  font-size: 14px;
+}
+
+.pb-card-lines {
+  margin: 6px 0 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.pb-card-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.pb-card.vd-src {
+  opacity: 0.35;
+  border-style: dashed;
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+.pb-editor {
+  margin-top: 10px;
+}
+
+.pb-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pb-editor-head b {
+  font-size: 14.5px;
+}
+
+.pb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pb-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pb-row-main b {
+  font-size: 13.5px;
+  font-weight: 620;
+}
+
+.pb-row-main .num {
+  font-size: 12px;
+}
+
+.pb-row .btn {
+  padding: 4px 10px;
+  min-height: 30px;
+  font-size: 12.5px;
+}
+
+.pb-add {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.pb-pick {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--bg);
+}
+
+/* 拖拽 ghost：跟手倾斜 + 毛玻璃变身显示目标日期，松手弹簧落洞 */
+.vd-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 999;
+  pointer-events: none;
+  border-radius: 14px;
+  overflow: hidden;
+  opacity: 0;
+  background: var(--accent-soft);
+  box-shadow: 0 1px 3px rgba(22, 24, 29, 0.06);
+  transform-origin: center center;
+  will-change: transform, background, backdrop-filter;
+  transition: background 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), backdrop-filter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.vd-ghost.on {
+  opacity: 1;
+}
+
+.vd-ghost.is-morphing {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(253, 236, 239, 0.72);
+  box-shadow: 0 30px 60px rgba(22, 24, 29, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+}
+
+.vd-orig,
+.vd-new {
+  position: absolute;
+  inset: 0;
+  will-change: opacity, filter, transform;
+}
+
+.vd-orig {
+  padding: 10px 12px;
+  opacity: 1;
+  filter: blur(0px);
+  transform: scale(1);
+  transition: opacity 0.5s ease, filter 0.6s ease, transform 0.6s ease;
+}
+
+.vd-ghost.is-morphing .vd-orig {
+  opacity: 0;
+  filter: blur(12px);
+  transform: scale(0.9);
+}
+
+.vd-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 660;
+  color: var(--accent-deep);
+  opacity: 0;
+  filter: blur(10px);
+  transform: scale(1.05);
+  transition: opacity 0.5s ease 0.1s, filter 0.5s ease 0.1s, transform 0.5s ease 0.1s;
+}
+
+.vd-ghost.is-morphing .vd-new {
+  opacity: 1;
+  filter: blur(0px);
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vd-ghost,
+  .vd-orig,
+  .vd-new,
+  .pb-cell {
+    transition: none;
+  }
+}
+
+/* ---------- 全站背景：柔光底色 + 两处水印 ----------
+   水印用的是这个应用自己的两个符号：右上那圈是叠起来的杠铃片，左下那条是身高体重那把刻度尺。
+   整块挂在 body::before 的 fixed 层上，不随长页面滚走，也不参与命中测试；
+   卡片自己有不透明白底 + 描边，所以纹理只在卡片之间的缝隙里露出来，不跟文字打架。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23e8485c' stroke-opacity='0.12' stroke-width='1.4'><circle cx='100' cy='100' r='34'/><circle cx='100' cy='100' r='58'/><circle cx='100' cy='100' r='80'/><circle cx='100' cy='100' r='98'/></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 198 44' fill='none' stroke='%235c626d' stroke-width='1' stroke-opacity='0.18'><path d='M9 44V28M27 44V28M45 44V28M63 44V28M81 44V18M99 44V28M117 44V28M135 44V28M153 44V28M171 44V18M189 44V28'/></svg>"), radial-gradient(62% 44% at 90% 2%, rgba(232, 72, 92, 0.07), rgba(232, 72, 92, 0) 72%), radial-gradient(56% 40% at 4% 58%, rgba(92, 110, 138, 0.06), rgba(92, 110, 138, 0) 74%), linear-gradient(180deg, #ffffff 0%, #fdfdfe 52%, #f6f7fb 100%);
+  background-repeat: no-repeat;
+  background-position: calc(100% + 46px) -54px, -26px calc(100% - 104px), 0 0, 0 0, 0 0;
+  background-size: 300px 300px, 198px 44px, auto, auto, auto;
+}
+
+/* 屏幕转横时那圈杠铃片会压到标题上，收小并挪远一点 */
+@media (orientation: landscape) and (min-width: 720px) {
+  body::before {
+    background-position: calc(100% + 90px) -120px, -26px calc(100% - 60px), 0 0, 0 0, 0 0;
+    background-size: 220px 220px, 160px 36px, auto, auto, auto;
+  }
+}
+
+/* 想要最干净的白底（截图、打印、省电屏）就别画水印，只留底色渐变 */
+@media (prefers-reduced-transparency: reduce) {
+  body::before {
+    background-image: linear-gradient(180deg, #ffffff 0%, #fdfdfe 52%, #f6f7fb 100%);
+  }
+}
+
+/* ---------- 背景第三层：水面缓动波纹 ----------
+   三条波长不同的极淡波形线合成一张 480×600 的横向平铺图，整层用 transform 慢慢平移（90s 走完一个 tile，约 5px/s），
+   走的是合成层，不重排也不逐帧重绘；宽度多留一个 tile，平移到头时右边不会露出空白。
+   三条线的起止点和切线方向都按对称算过，接缝看不出来。
+   它只是装饰：pointer-events:none、z-index:-1，卡片和照片带的白底照常把它盖住。 */
+@keyframes bg-drift {
+  to {
+    transform: translate3d(-480px, 0, 0);
+  }
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% + 480px);
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 600' fill='none' preserveAspectRatio='none'><path d='M0 150 C40 136 80 136 120 150 C160 164 200 164 240 150 C280 136 320 136 360 150 C400 164 440 164 480 150' stroke='%23e8485c' stroke-opacity='0.10' stroke-width='1.6'/><path d='M0 320 C27 310 53 310 80 320 C107 330 133 330 160 320 C187 310 213 310 240 320 C267 330 293 330 320 320 C347 310 373 310 400 320 C427 330 453 330 480 320' stroke='%235c626d' stroke-opacity='0.09' stroke-width='1.3'/><path d='M0 470 C20 462 40 462 60 470 C80 478 100 478 120 470 C140 462 160 462 180 470 C200 478 220 478 240 470 C260 462 280 462 300 470 C320 478 340 478 360 470 C380 462 400 462 420 470 C440 478 460 478 480 470' stroke='%23a7b0c0' stroke-opacity='0.10' stroke-width='1.1'/></svg>");
+  background-repeat: repeat-x;
+  background-position: 0 0;
+  background-size: 480px 100%;
+  animation: bg-drift 90s linear infinite;
+}
+
+/* 系统要求减少动态就整层定住：全站那条 animation-duration 0.001ms 的兜底会把这层抖到终点，
+   对一条无限循环的平移来说等于瞬间跳位，所以这里显式关掉而不是让它极快地跑 */
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
+}
+
+/* 要求减少透明度时，波纹和上面那两处水印一起消失，只留底色渐变 */
+@media (prefers-reduced-transparency: reduce) {
+  body::after {
+    content: none;
+  }
+}
+
+/* 横屏短屏上那条最低的线会压到底栏区域，整体上收一点 */
+@media (orientation: landscape) and (min-height: 560px) {
+  body::after {
+    background-size: 480px 100%;
+    opacity: 0.85;
   }
 }

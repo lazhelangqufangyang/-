@@ -43,7 +43,14 @@ public class PasswordAuthController {
         if (guard.blocked(key)) {
             throw new ApiException(429, "试的次数太多了，" + guard.retryAfterSeconds(key) + " 秒之后再来。");
         }
-        long userId = account.createPasswordUser(loginName, PasswordHash.create(password));
+        long userId;
+        try {
+            userId = account.createPasswordUser(loginName, PasswordHash.create(password));
+        } catch (ApiException e) {
+            // 重名这句等于告诉对方「这个账号名有人用了」，所以也记进失败次数，不让人拿注册接口批量试名
+            guard.failed(key);
+            throw e;
+        }
         guard.passed(key);
         // 刚插进去的一行 plan 就是表上的默认值 free，不必再读一遍库
         return issued(userId, loginName, "free");

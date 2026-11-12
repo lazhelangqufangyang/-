@@ -85,8 +85,8 @@ export default function MeasureCard({ measures, goal, profileWeight, onAdd, onRe
         setErr('');
     };
     const shown = [
-        stats.avg7.avg !== null ? `近 7 天平均 ${stats.avg7.avg} kg` : '',
-        stats.avgPrev7.avg !== null ? `上一个 7 天 ${stats.avgPrev7.avg} kg` : '',
+        stats.avg7.avg === null ? '' : stats.avg7.days === 1 ? `近 7 天只有 1 天有数：${stats.avg7.avg} kg` : `近 7 天平均 ${stats.avg7.avg} kg`,
+        stats.avgPrev7.avg === null || stats.avgPrev7.days < 2 ? '' : `上一个 7 天平均 ${stats.avgPrev7.avg} kg`,
         stats.weeklyKg !== null ? `一周 ${stats.weeklyKg > 0 ? '+' : ''}${stats.weeklyKg} kg` : '',
         stats.waistDelta !== null ? `腰围比最早那次 ${stats.waistDelta > 0 ? '+' : ''}${stats.waistDelta} cm` : '',
         stats.basis ? `按${stats.basis}算` : ''

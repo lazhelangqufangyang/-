@@ -37,6 +37,8 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
     /** 递减组那一行的档位：2–3 档，每档一个重量、做几组 */
     const [dropSteps, setDropSteps] = useState([]);
     const [swapOpen, setSwapOpen] = useState(null);
+    /** 删一组要点两次：这一组记下的次数会跟着没，原生 confirm 在全屏 PWA 里又丑又容易被忽略 */
+    const [cutArmed, setCutArmed] = useState(null);
     const [symptom, setSymptom] = useState('');
     const [aiReasons, setAiReasons] = useState({});
     const [aiBusy, setAiBusy] = useState(false);
@@ -132,6 +134,7 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
     const openLog = (slot, setIdx) => {
         const p = slot.setPlan[setIdx];
         const prev = logMap.get(setKey(slot.id, setIdx));
+        setCutArmed(null);
         setDraftWeight(p.weightKg != null ? String(p.weightKg) : '');
         setDraftReps(String(prev?.reps ?? p.reps));
         // RPE 是这一组做完之后的感觉，没记过就空着，不拿计划里的目标值冒充
@@ -265,13 +268,20 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
                                 </span>)}
                               <span className="got num">{rec ? '改这组 ›' : p.drop ? '记这几档 ›' : '点这里记这组 ›'}</span>
                             </button>
-                            {slot.setPlan.length > 1 ? (<button className="set-cut" onClick={() => {
-                                    if (rec && !window.confirm(`删掉第 ${i + 1} 组？这一组记下的 ${rec.reps} 次也一起删`))
-                                        return;
-                                    onCutSet(slot.id, i);
-                                }}>
-                                ✕
-                              </button>) : null}
+                            {slot.setPlan.length > 1 ? (cutArmed === key && rec ? (<button className="set-cut on" onClick={() => {
+                                        onCutSet(slot.id, i);
+                                        setCutArmed(null);
+                                    }}>
+                                      确认删
+                                    </button>) : (<button className="set-cut" title={rec ? `这一组记下的 ${rec.reps} 次会一起删` : ''} onClick={() => {
+                                        if (!rec) {
+                                            onCutSet(slot.id, i);
+                                            return;
+                                        }
+                                        setCutArmed(key);
+                                    }}>
+                                    ✕
+                                  </button>)) : null}
                           </div>
                           {isOpen ? (<div className="logpanel">
                               {p.drop ? (<div className="dropbox">
@@ -326,7 +336,10 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
                   </div>
                   {slot.note ? <div className="faint" style={{ marginTop: 6 }}>{slot.note}</div> : null}
                   {slot.kind !== 'ramp' ? (<div className="chips" style={{ marginTop: 8 }}>
-                      <button className="chip" onClick={() => onAddSet(slot.id)}>
+                      <button className="chip" onClick={() => {
+                            setCutArmed(null);
+                            onAddSet(slot.id);
+                        }}>
                         ＋加一组
                       </button>
                       {slot.exId === 'lateral-raise' ? (<button className="chip" aria-pressed={hasDropSet(slot)} onClick={() => onDropSet(slot.id)}>

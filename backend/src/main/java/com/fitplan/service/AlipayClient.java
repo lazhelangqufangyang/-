@@ -246,9 +246,14 @@ public class AlipayClient {
         }
 
         String nodeKey = method.replace('.', '_') + "_response";
-        String foundKey = body.has(nodeKey) ? nodeKey : "error_response";
+        boolean businessResult = body.has(nodeKey);
+        String foundKey = businessResult ? nodeKey : "error_response";
         String signed = extractNode(raw, foundKey);
         JsonNode signature = body.get("sign");
+        // 带业务结果的回执必须验签：以前是「有 sign 才验」，那等于告诉任何人只要不发 sign 就能让这条结果被采信
+        if (businessResult && (signed == null || signature == null)) {
+            throw new IllegalStateException("支付宝这份回执没带签名或签名位置认不出来，结果不信：" + prefix(raw));
+        }
         if (signed != null && signature != null) {
             if (publicKey == null) {
                 throw new IllegalStateException("支付宝回执带回来了签名，但后端没有 ALIPAY_PUBLIC_KEY，不敢当可信结果用。");

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { RPE_MAX, RPE_MIN, RPE_TOP } from '../engine/rpe.js';
-import { mountEffortMotion } from './effortMotion.js';
+import { mountEffortMotion, EFFORT_TONES } from './effortMotion.js';
 
 const MUSCLE = 'M14 8C20 4.5 28 7 29 15C30 20 29 23 25 26L27 34C28 37 31 37 34 33C38 27 45 25 50 29C55 32 58 39 56 46C54 52 47 56 39 55L23 54C15 53 10 48 10 41L10 22C10 15 9 11 14 8Z';
 const LINES = ['M15 14C19 11 24 12 26 16', 'M28 37C31 40 34 39 36 35'];
@@ -56,7 +56,7 @@ export default function EffortSlider({ value, onChange }) {
         </div>
       </div>
       <div className="es-scale num" aria-hidden="true">
-        {MARKS.map((n, i) => (<span key={n} style={{ left: at(i / (MARKS.length - 1)) }}>
+        {MARKS.map((n, i) => (<span key={n} style={{ left: at(i / (MARKS.length - 1)), color: EFFORT_TONES[(n - 6) * 2].ink }}>
             {n}
           </span>))}
       </div>

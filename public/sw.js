@@ -1,9 +1,13 @@
-const CACHE = 'fitplan-v31';
+const CACHE = 'fitplan-v41';
 const CORE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/splash.jpg',
+  '/splash/silver.png',
+  '/splash/storm.jpg',
+  '/splash/clouds.jpg',
+  '/splash/helmet.jpg',
   '/plan.jpg',
   '/direct.jpg',
   '/pick.jpg',
@@ -42,6 +46,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   // /api 是会话和订阅状态，缓存下来会让你以为还登着
   if (url.pathname.startsWith('/api/')) return;
+  // 落地页不接管：navigate 回写会把落地页 HTML 污染进应用壳缓存
+  if (url.pathname.startsWith('/landing/')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

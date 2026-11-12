@@ -85,6 +85,9 @@ public final class JsonUtil {
         if (value instanceof LocalDateTime ldt) {
             return ISO_UTC.format(ldt.atZone(SHANGHAI).toInstant());
         }
+        if (value instanceof Instant instant) {
+            return ISO_UTC.format(instant);
+        }
         return null;
     }
 }

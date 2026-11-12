@@ -167,6 +167,7 @@ function DataPanel({ state, onImport }) {
 function CloudPanel({ state, onImport }) {
     const [msg, setMsg] = useState('');
     const [busy, setBusy] = useState(false);
+    const [conflict, setConflict] = useState('');
     if (!sessionToken())
         return (<div className="card" style={{ marginTop: 12 }}>
         <h3>云端备份</h3>
@@ -175,11 +176,16 @@ function CloudPanel({ state, onImport }) {
     const run = async (fn) => {
         setBusy(true);
         setMsg('');
+        setConflict('');
         try {
             setMsg(await fn());
         }
         catch (e) {
-            setMsg(e.message);
+            // 409 = 后端认出这台设备拿的是旧的一份，别把人家刚传上去的盖掉
+            if (e.status === 409)
+                setConflict(e.message);
+            else
+                setMsg(e.message);
         }
         finally {
             setBusy(false);
@@ -189,6 +195,9 @@ function CloudPanel({ state, onImport }) {
         if (!window.confirm(`云端这一份会被整份换成此刻本机的记录（${countLines(state)}）。继续？`))
             return;
         void run(async () => `已传到云端：${receiptText(await pushRecords(state))}`);
+    };
+    const forceUpload = () => {
+        void run(async () => `已覆盖云端那一份：${receiptText(await pushRecords(state, true))}`);
     };
     const download = () => {
         if (!window.confirm('这会问云端要一份回来覆盖本机记录。本机这份建议先导出 JSON 留底。继续？'))
@@ -221,6 +230,17 @@ function CloudPanel({ state, onImport }) {
           删云端那一份
         </button>
       </div>
+      {conflict ? (<div className="conflict">
+          <div className="missing">{conflict}</div>
+          <div className="btnbar">
+            <button className="btn" onClick={forceUpload} disabled={busy}>
+              就用本机这份覆盖
+            </button>
+            <button className="btn ghost" onClick={download} disabled={busy}>
+              先把云端那份拉回来
+            </button>
+          </div>
+        </div>) : null}
       {msg ? (<div className="notice" style={{ marginTop: 10 }}>
           {msg}
         </div>) : null}

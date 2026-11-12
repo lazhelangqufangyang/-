@@ -17,6 +17,8 @@ import { loadLabel, roundLoad, suggestWeight } from '../src/engine/load.js';
 import { baselineAdvice } from '../src/engine/lifestyle.js';
 import { applyDirective, describe, isEmpty, parseByRule } from '../src/engine/tweak.js';
 import { RPE_LABELS, RPE_STEPS, RPE_TOP, isRpe, rpeAt, rpeIndex, rpeLabel } from '../src/engine/rpe.js';
+import { EFFORT_TONES } from '../src/ui/effortMotion.js';
+import { buildWeekPlan, fwForWeek, mondayOf, moveDay, setDayExercises, weekDates } from '../src/engine/weekplan.js';
 /** 浏览器才有的东西，Node 里给它一个内存版，否则存档那一层的往返测不了 */
 if (!('localStorage' in globalThis)) {
     const mem = new Map();
@@ -1615,5 +1617,100 @@ head('AY 这组多累：6–10 半档九级、拖到哪儿就吸到哪儿、没�
     }));
     want('半档 9.5 导出再导入还在', String(back.setLogs[0]?.rpe), '9.5');
     line('  九档：' + RPE_STEPS.map((v, i) => `${v} ${RPE_LABELS[i]}`).join(' ｜ '));
+    line('  判据不符的项：' + (miss.length ? '\n    · ' + miss.join('\n    · ') : '没有'));
+}
+
+head('AZ 力度条配色：6、7 走绿，8、9 走橙红，四个色族不撞车');
+{
+    const miss = [];
+    const want = (label, got, exp) => {
+        if (got !== exp)
+            miss.push(`${label}: 实际 ${got} / 期望 ${exp}`);
+        line(`  ${got === exp ? '✔' : '✘'} ${label} = ${got}（期望 ${exp}）`);
+    };
+    const hue = ([r, g, b]) => {
+        const max = Math.max(r, g, b);
+        const d = max - Math.min(r, g, b);
+        if (!d)
+            return 0;
+        const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        return (h * 60 + 360) % 360;
+    };
+    const gap = (a, b) => {
+        const d = Math.abs(a - b) % 360;
+        return Math.min(d, 360 - d);
+    };
+    const lin = (c) => {
+        const s = c / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const end = (i) => EFFORT_TONES[i].stops[4];
+    want('一档一色，九档九条', String(EFFORT_TONES.length), '9');
+    want('每条五个色标', String(EFFORT_TONES.every((t) => t.stops.length === 5)), 'true');
+    want('6–7.5 全在松石绿那一段', String([0, 1, 2, 3].every((i) => hue(end(i)) >= 150 && hue(end(i)) <= 190)), 'true');
+    want('8–8.5 全在琥珀那一段', String([4, 5].every((i) => hue(end(i)) >= 25 && hue(end(i)) <= 50)), 'true');
+    want('9–9.5 全在真红那一段', String([6, 7].every((i) => hue(end(i)) >= 335 && hue(end(i)) <= 360)), 'true');
+    want('10 还是紫的', String(hue(end(8)) >= 245 && hue(end(8)) <= 275), 'true');
+    const pairs = [0, 2].flatMap((c) => [4, 6].map((w) => Math.round(gap(hue(end(c)), hue(end(w))))));
+    want('6、7 对 8、9 的色相差都过 90 度', String(pairs.every((d) => d >= 90)), 'true');
+    want('四个色族的字色不重样', String(new Set(EFFORT_TONES.map((t) => t.ink)).size), '4');
+    want('四个色族的边框不重样', String(new Set(EFFORT_TONES.map((t) => t.border)).size), '4');
+    want('7 和 8 的肌肉差得远', String(dist(EFFORT_TONES[2].body, EFFORT_TONES[4].body) >= 100), 'true');
+    want('6 和 9 的肌肉差得远', String(dist(EFFORT_TONES[0].body, EFFORT_TONES[6].body) >= 100), 'true');
+    want('字色压在白底上都读得清', String(EFFORT_TONES.every((t) => 1.05 / (lum(hex(t.ink)) + 0.05) >= 4.5)), 'true');
+    want('描边比肌肉本身深', String(EFFORT_TONES.every((t) => lum(t.edge) < lum(t.body))), 'true');
+    want('肌肉比它压住的那截底色浅', String(EFFORT_TONES.every((t, i) => lum(t.body) > lum(end(i)))), 'true');
+    want('绿色那四档越走越深', String([1, 2, 3].every((i) => lum(end(i)) < lum(end(i - 1)))), 'true');
+    want('刻度上五个数各认各的色族', [0, 2, 4, 6, 8].map((i) => EFFORT_TONES[i].ink).join('/'), '#0a6b5b/#0a6b5b/#8a4b06/#b8253a/#6b3fd0');
+    line('  色相：' + EFFORT_TONES.map((t, i) => `${RPE_STEPS[i]}→${Math.round(hue(end(i)))}°`).join(' ｜ '));
+    line('  6/7 对 8/9 的色相差：' + pairs.join('、') + ' 度');
+    line('  判据不符的项：' + (miss.length ? '\n    · ' + miss.join('\n    · ') : '没有'));
+}
+
+head('BA 周计划层：日期铺排、拖拽换天、点进去改动作');
+{
+    const miss = [];
+    const want = (label, got, exp) => {
+        if (got !== exp)
+            miss.push(`${label}: 实际 ${got} / 期望 ${exp}`);
+        line(`  ${got === exp ? '✔' : '✘'} ${label} = ${got}（期望 ${exp}）`);
+    };
+    const p = { ...base, weekdays: [1, 3, 5], dayAreas: {} };
+    p.goal = wishToGoal(p);
+    const fw = buildFramework(p, p.goal);
+    const ws = mondayOf('2026-11-12');
+    want('周四归到本周一', ws, '2026-11-09');
+    const dates = weekDates(ws);
+    want('一周七格', String(dates.length), '7');
+    want('七格连着', String(dates.every((d, i) => i === 0 || addDaysIso(dates[i - 1], 1) === d)), 'true');
+    const wp = buildWeekPlan(fw, ws);
+    want('框架三天铺到三个日期', String(dates.filter((d) => wp.days[d]).length), '3');
+    want('周一那格就是框架周一', wp.days['2026-11-09']?.role, fw.days.find((d) => d.weekday === 1)?.role);
+    want('周二休息', String(wp.days['2026-11-10']), 'null');
+    const moved = moveDay(wp, '2026-11-09', '2026-11-10');
+    want('拖到休息日：那天变训练日', String(Boolean(moved.days['2026-11-10'])), 'true');
+    want('拖走的那天变休息', String(moved.days['2026-11-09']), 'null');
+    const swapped = moveDay(wp, '2026-11-09', '2026-11-11');
+    want('拖到已有安排：互换', swapped.days['2026-11-11']?.role, wp.days['2026-11-09'].role);
+    want('互换另一头也对', swapped.days['2026-11-09']?.role, wp.days['2026-11-11'].role);
+    want('原地拖不动', String(moveDay(wp, '2026-11-09', '2026-11-09') === wp), 'true');
+    const remap = fwForWeek(fw, moved);
+    want('remap 回星期几喂引擎', remap.days.find((d) => d.weekday === 2)?.role, wp.days['2026-11-09'].role);
+    const edited = setDayExercises(wp, '2026-11-09', ['bench-press', 'bench-press', 'db-curl', 'not-an-ex']);
+    want('改动作去重去野 id', edited.days['2026-11-09'].exerciseIds.join(','), 'bench-press,db-curl');
+    want('主项跟着换', edited.days['2026-11-09'].mainLiftId, 'bench-press');
+    const cleared = setDayExercises(wp, '2026-11-09', []);
+    want('删光变休息日', String(cleared.days['2026-11-09']), 'null');
+    const created = setDayExercises(wp, '2026-11-10', ['back-squat']);
+    want('休息日加动作变训练日', created.days['2026-11-10']?.role, '自选');
+    want('加出来的主项是深蹲', created.days['2026-11-10']?.mainLiftId, 'back-squat');
+    const sheet = buildSheet(p, fwForWeek(fw, moved), { totalMinutes: null, wantArea: null, wantAreas: [] }, [], '2026-11-10', {});
+    want('换天之后引擎真按新日期排', String(sheet.slots.some((s) => s.exId === wp.days['2026-11-09'].exerciseIds[0])), 'true');
+    saveState({ ...initialState(), weekPlan: wp });
+    want('周计划层落盘再读还在', loadState().weekPlan?.weekStart, ws);
+    want('手改坏的周计划整层丢掉', String(parseImported(JSON.stringify({ profile: emptyProfile(), weekPlan: { weekStart: 3, days: [] } })).weekPlan), 'null');
     line('  判据不符的项：' + (miss.length ? '\n    · ' + miss.join('\n    · ') : '没有'));
 }

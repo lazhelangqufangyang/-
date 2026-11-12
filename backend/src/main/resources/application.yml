@@ -33,6 +33,9 @@ fitplan:
   # 允许跨域调 /api 的来源，逗号分隔；留空用代码里的默认三个
   origins: ${FITPLAN_ORIGINS:}
   session-days: ${FITPLAN_SESSION_DAYS:30}
+  # 排查用的开关：打开后 /api/health 才把「缺哪些环境变量、CORS 白名单」写进回应，
+  # 挂着隧道对外时保持关 —— 否则任何人都能看见这台服务还没配什么
+  health-detail: ${FITPLAN_HEALTH_DETAIL:false}
   alipay:
     app-id: ${ALIPAY_APP_ID:}
     gateway: ${ALIPAY_GATEWAY:https://openapi.alipay.com/gateway.do}
