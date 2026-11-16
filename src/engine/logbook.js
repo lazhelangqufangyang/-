@@ -21,13 +21,6 @@ function setTonnage(l, ex) {
         return 0;
     return l.weightKg * perRep;
 }
-/** 一行记下来的数：递减组写成「7kg×2组 5kg×1组」，普通组还是「重量×次数」 */
-function setLabel(l, unit) {
-    if (l.dropSteps?.length) {
-        return l.dropSteps.map((s) => `${s.weightKg === null ? '自重' : fmtLoad(s.weightKg, unit)}×${Math.max(1, s.sets)}组`).join(' ');
-    }
-    return `${l.weightKg === null ? '自重' : fmtLoad(l.weightKg, unit)}×${l.reps}`;
-}
 /** 格子里写不下全称，也没必要：稳定肌和心肺每天都被大项带到，列出来反而看不出这天真正练的是什么 */
 const PART_SHORT = {
     股四头: '大腿',
@@ -146,7 +139,6 @@ export function buildEntries(sheets, logs, acts) {
                 name: `${ex?.name ?? exId}${lane === 'ramp' ? ' · 递增热身' : ''}`,
                 unit,
                 sets: mine.length,
-                perSet: mine.map((l) => setLabel(l, unit)),
                 rows: mine.map((l) => ({
                     idx: l.setIdx,
                     weightKg: l.weightKg,
