@@ -1,5 +1,7 @@
 package com.fitplan.web;
 
+import com.fitplan.auth.security.AuthUser;
+import com.fitplan.auth.security.CurrentUser;
 import com.fitplan.config.ApiException;
 import com.fitplan.config.FitplanProperties;
 import com.fitplan.service.AccountService;
@@ -37,14 +39,14 @@ public class PayController {
 
     @PostMapping("/api/pay/order")
     public Map<String, Object> createOrder(HttpServletRequest request) {
-        Map<String, Object> user = account.requireUser(TokenSupport.bearer(request), "先登录再买");
+        AuthUser user = CurrentUser.require();
         if (!pay.payMissing().isEmpty()) {
             throw new ApiException(400, "收款还没在这台服务上开通");
         }
         FitplanProperties.Pay cfg = props.getPay();
         int amountCent = PayService.toCent(cfg.getPriceYuan());
         String outTradeNo = PayService.newOutTradeNo();
-        account.createOrder(outTradeNo, AccountService.userIdOf(user), cfg.getDays(), amountCent);
+        account.createOrder(outTradeNo, user.id(), cfg.getDays(), amountCent);
         String url = pay.payUrl(
             outTradeNo,
             amountCent,
@@ -64,15 +66,15 @@ public class PayController {
     @GetMapping("/api/pay/order")
     public Map<String, Object> orderStatus(@RequestParam(value = "out_trade_no", required = false) String outTradeNo,
                                            HttpServletRequest request) {
-        Map<String, Object> user = account.requireUser(TokenSupport.bearer(request), "没有有效会话");
+        AuthUser user = CurrentUser.require();
         Map<String, Object> order = outTradeNo == null || outTradeNo.isEmpty() ? null : account.getOrder(outTradeNo);
-        if (order != null && orderUserId(order) != AccountService.userIdOf(user)) {
+        if (order != null && orderUserId(order) != user.id()) {
             throw new ApiException(403, "这不是你的订单");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", order == null ? "none" : String.valueOf(order.get("status")));
-        out.put("plan", account.planState(user));
-        out.put("expiresAt", JsonUtil.iso(user.get("plan_expires_at")));
+        out.put("plan", user.pro() ? "pro" : "free");
+        out.put("expiresAt", JsonUtil.iso(user.planExpiresAt()));
         return out;
     }
 

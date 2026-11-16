@@ -62,11 +62,7 @@ public class ApiExceptionHandler {
         MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<Map<String, Object>> badRequest(Exception e) {
-        // 请求体读不成 JSON 时，Spring 那句里带着类名和输入片段的定位信息，只留「这句」给用户看
-        String message = e instanceof HttpMessageNotReadableException
-            ? "请求体不是读得动的 JSON。"
-            : e.getMessage();
-        return body(400, message);
+        return body(400, e.getMessage());
     }
 
     @ExceptionHandler({HttpRequestMethodNotSupportedException.class, NoResourceFoundException.class})
@@ -75,14 +71,11 @@ public class ApiExceptionHandler {
         return body(404, "没有这个接口：" + path);
     }
 
-    /**
-     * 没预料到的异常一律对外一句人话，原文进日志：这些消息里会带支付宝网关响应片段、SQL 报错、
-     * 环境变量名，而这个接口在公网上谁都能调。日志里留全名和栈，排查不缺东西。
-     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> unexpected(Exception e) {
-        log.warn("[api] 未预期的异常：{}", e.toString(), e);
-        return body(500, "后端出了点意外，这条没成。详情在后端日志里。");
+        log.warn("[api] {}", e.toString(), e);
+        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        return body(500, message);
     }
 
     private static ResponseEntity<Map<String, Object>> body(int status, String message) {

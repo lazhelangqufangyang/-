@@ -43,12 +43,6 @@ public final class JsonUtil {
         return true;
     }
 
-    /** 取一个字符串字段：没有、null、缺键都回 null，调用方不用层层判空。 */
-    public static String text(JsonNode node, String field) {
-        JsonNode value = node == null ? null : node.get(field);
-        return value == null || value.isNull() ? null : value.asText();
-    }
-
     public static String stringify(JsonNode node) {
         try {
             return MAPPER.writeValueAsString(node);
@@ -82,11 +76,8 @@ public final class JsonUtil {
         if (value instanceof Timestamp ts) {
             return iso(ts);
         }
-        if (value instanceof LocalDateTime ldt) {
-            return ISO_UTC.format(ldt.atZone(SHANGHAI).toInstant());
-        }
-        if (value instanceof Instant instant) {
-            return ISO_UTC.format(instant);
+        if (value instanceof LocalDateTime local) {
+            return ISO_UTC.format(local.atZone(SHANGHAI).toInstant());
         }
         return null;
     }

@@ -96,6 +96,37 @@ public class AlipayClient {
         return exec("alipay.user.info.share", extra);
     }
 
+    /** 全额退款：out_request_no 固定用订单号，重复提交会被支付宝按同一笔退款去重。 */
+    public JsonNode refund(String outTradeNo, int amountCent, String reason) {
+        LinkedHashMap<String, Object> biz = new LinkedHashMap<>();
+        biz.put("out_trade_no", outTradeNo);
+        biz.put("refund_amount", PayService.fromCent(amountCent));
+        biz.put("out_request_no", outTradeNo);
+        if (!FitplanProperties.isBlank(reason)) {
+            biz.put("refund_reason", reason);
+        }
+        return exec("alipay.trade.refund", bizContent(biz));
+    }
+
+    /** 关闭未付款订单：支付宝侧关掉之后，用户再打开收银台也付不了。 */
+    public JsonNode closeTrade(String outTradeNo) {
+        LinkedHashMap<String, Object> biz = new LinkedHashMap<>();
+        biz.put("out_trade_no", outTradeNo);
+        return exec("alipay.trade.close", bizContent(biz));
+    }
+
+    private static LinkedHashMap<String, String> bizContent(Map<String, Object> biz) {
+        String json;
+        try {
+            json = JsonUtil.MAPPER.writeValueAsString(biz);
+        } catch (Exception e) {
+            throw new IllegalStateException("支付宝业务参数序列化失败：" + e.getMessage(), e);
+        }
+        LinkedHashMap<String, String> extra = new LinkedHashMap<>();
+        extra.put("biz_content", json);
+        return extra;
+    }
+
     /** 签名串：按键名排序拼 k=v，值不做 URL 编码（支付宝网关 RSA2 的口径）。 */
     public static String canonical(Map<String, String> params) {
         TreeMap<String, String> sorted = new TreeMap<>();
@@ -246,14 +277,9 @@ public class AlipayClient {
         }
 
         String nodeKey = method.replace('.', '_') + "_response";
-        boolean businessResult = body.has(nodeKey);
-        String foundKey = businessResult ? nodeKey : "error_response";
+        String foundKey = body.has(nodeKey) ? nodeKey : "error_response";
         String signed = extractNode(raw, foundKey);
         JsonNode signature = body.get("sign");
-        // 带业务结果的回执必须验签：以前是「有 sign 才验」，那等于告诉任何人只要不发 sign 就能让这条结果被采信
-        if (businessResult && (signed == null || signature == null)) {
-            throw new IllegalStateException("支付宝这份回执没带签名或签名位置认不出来，结果不信：" + prefix(raw));
-        }
         if (signed != null && signature != null) {
             if (publicKey == null) {
                 throw new IllegalStateException("支付宝回执带回来了签名，但后端没有 ALIPAY_PUBLIC_KEY，不敢当可信结果用。");

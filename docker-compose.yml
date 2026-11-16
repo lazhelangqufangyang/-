@@ -1,0 +1,104 @@
+name: fitplan
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fitplan-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fitplan}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 首次启动自动建表；已有数据卷不会重复执行
+      - ./server/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - fitplan_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: fitplan-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - fitplan_net
+
+  backend:
+    build:
+      context: ./backend
+    container_name: fitplan-backend
+    restart: unless-stopped
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fitplan}
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-120}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
+      ADMIN_NICKNAME: ${ADMIN_NICKNAME:-管理员}
+      # 容器环境固定关闭体验免密登录
+      DEMO_LOGIN_ENABLED: "false"
+      FITPLAN_FRONT: ${FITPLAN_FRONT:-http://localhost}
+      FITPLAN_ORIGINS: ${FITPLAN_ORIGINS:-http://localhost}
+      FITPLAN_PUBLIC_BASE: ${FITPLAN_PUBLIC_BASE:-}
+      FITPLAN_PRO_PRICE_YUAN: ${FITPLAN_PRO_PRICE_YUAN:-8}
+      FITPLAN_PRO_DAYS: ${FITPLAN_PRO_DAYS:-30}
+      FITPLAN_PRO_SUBJECT: ${FITPLAN_PRO_SUBJECT:-练 · Pro 会员}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_APP_PRIVATE_KEY: ${ALIPAY_APP_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-https://openapi.alipay.com/gateway.do}
+      TZ: Asia/Shanghai
+    volumes:
+      # 让 SchemaInitializer 在已有数据卷上也能补建表
+      - ./server/schema.sql:/app/server/schema.sql:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fitplan_net
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: fitplan-frontend
+    restart: unless-stopped
+    ports:
+      - "${FITPLAN_HTTP_PORT:-80}:80"
+    depends_on:
+      - backend
+    networks:
+      - fitplan_net
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  fitplan_net:
+    driver: bridge

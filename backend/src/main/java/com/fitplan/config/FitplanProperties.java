@@ -14,17 +14,9 @@ public class FitplanProperties {
     private String publicBase = "";
     private String origins = "";
     private int sessionDays = 30;
-    private boolean healthDetail = false;
+    private final Auth auth = new Auth();
     private final Alipay alipay = new Alipay();
     private final Pay pay = new Pay();
-
-    public boolean isHealthDetail() {
-        return healthDetail;
-    }
-
-    public void setHealthDetail(boolean healthDetail) {
-        this.healthDetail = healthDetail;
-    }
 
     public int getApiPort() {
         return apiPort;
@@ -64,6 +56,10 @@ public class FitplanProperties {
 
     public void setSessionDays(int sessionDays) {
         this.sessionDays = sessionDays;
+    }
+
+    public Auth getAuth() {
+        return auth;
     }
 
     public Alipay getAlipay() {
@@ -116,6 +112,37 @@ public class FitplanProperties {
 
     private static String trimTrailingSlash(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
+    }
+
+    public static class Auth {
+
+        private String jwtSecret = "";
+        private int expireMinutes = 120;
+        private boolean demoLogin = false;
+
+        public String getJwtSecret() {
+            return jwtSecret;
+        }
+
+        public void setJwtSecret(String jwtSecret) {
+            this.jwtSecret = jwtSecret;
+        }
+
+        public int getExpireMinutes() {
+            return expireMinutes;
+        }
+
+        public void setExpireMinutes(int expireMinutes) {
+            this.expireMinutes = expireMinutes;
+        }
+
+        public boolean isDemoLogin() {
+            return demoLogin;
+        }
+
+        public void setDemoLogin(boolean demoLogin) {
+            this.demoLogin = demoLogin;
+        }
     }
 
     public static class Alipay {

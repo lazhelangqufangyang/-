@@ -1,100 +1,148 @@
-# 练
+# 健身计划 FitPlan
 
-移动端优先的健身计划 PWA：把「想练成什么样」翻成一份周框架，每天生成一张按顺序往下做的清单，逐组记重量和次数，重量按你自己的记录往上推。
+本地优先的健身训练与饮食规划应用：按身体档案生成周训练框架和每日清单，记录逐组训练、饮食、体重与腰围；登录后支持云端备份、Pro 订阅和账号管理。
 
-在线地址：<https://minute-fitplan-9u7zherxrt7.qoder.zone/>
+## 功能
 
-## 里面有什么
+- **训练计划**：档案问卷 → 周框架 → 今日训练清单，支持动作替换、跳过与载重调整
+- **训练记录**：逐组记录重量、次数、RPE，支持力竭标记和历史回顾
+- **动作库**：64 个动作，含部位、器械、难度、要点与替代动作
+- **饮食记录**：65 种食物库，按早餐/午餐/晚餐/加餐记录热量与三大营养素
+- **目标参考**：TDEE、热量区间、蛋白质目标、体重变化趋势
+- **本地优先**：登录后使用全部功能，记录默认存本机 `localStorage`
+- **账号体系**：账号密码注册/登录、支付宝登录、修改密码、注销账号
+- **隐私合规**：注册前必须勾选隐私政策与服务条款
+- **云端备份**：整份记录上传/拉回/删除，支持多设备
+- **管理后台**：账号搜索、停用/启用、手填天数开通 VIP、订单管理与退款、操作日志
+- **操作留痕**：登录、登录失败、退出、注册、改密和管理操作均写入日志
+- **PWA**：可安装到主屏，断网可用
 
-- **建档两问**：身体数据、想练成什么样，都能跳过，也可以一句「先不设目标，自由练」。训练日不问：默认周一到周四，练哪天自己在那个页面上挪。
-- **新手不用先懂分化**：没系统练过的人直接拿到一套四练三分化（周一 胸+三头 / 周二 背+二头 / 周三 腿+臀 / 周四 肩+手臂），一次四个动作、每个 3 组 10–15 次，前两周重量按周计划不动，第三周起做满次数才加。
-- **周框架自己点**：哪天练、那天练哪个部位由你决定，组数 / 次数 / 重量由本机规则按你的器械条件、伤病记录和逐组历史算，排课不请求任何模型。动作记过一次之后，重量就只按你自己的记录往上推，不再用估算值。
-- **动作库 109 个**：按部位分区，每个动作有本机画的 SVG 动作示意、发力顺序、常见错误和同肌群替代动作。44 个动作预置了示范视频链接，指向 [谭成义](https://space.bilibili.com/521903482) 本人的 B 站与抖音页面 —— 只放链接，不复制、不内嵌。
-- **逐组记录**：记每一组的重量和次数，可选 RPE；能加一组、删一组、给某个动作挂递减组（按档记重量和组数）、拖卡片改顺序，不想练的那一行直接从天里拿掉。
-- **身体数据打卡**（在「记录」里）：每天称一次体重、隔几周量一次腰围，记下来就有折线和周变化。判断按最近两个 7 天平均相减，不按某一天说话；走势对着你目标的节奏（减脂一周 0.5–1%，超过 1% 就提醒你别再砍热量），还能一键把最新一次称重更新进档案，热量参考跟着走。
-- **饮食**：按 Mifflin-St Jeor 估基础代谢再乘活动系数给一日热量参考，另有蛋白 / 碳水 / 脂肪 / 糖 / 钠五项区间、65 条常见食物营养表、按档案算出的三份主食方案。
-- **离线可用**：可以添加到主屏幕，断网能看档案、翻清单、记组数。
+## 技术栈
 
-## 数据放在哪
+| 层 | 技术 |
+|---|---|
+| 前端 | React 19、Vite 8、手写 CSS、hash 路由、原生 fetch |
+| 后端 | Java 17、Spring Boot 3.3.5、Spring Security 6、JJWT、MyBatis-Plus、SpringDoc |
+| 数据库 | MySQL 8（`utf8mb4`，`Asia/Shanghai`） |
+| 缓存 | Redis（JWT 黑名单、登录/注册限流） |
+| 工具 | Hutool、Lombok、Maven |
 
-默认全部留在这台设备的浏览器 `localStorage`（键名 `fitplan.v1`）：档案、周框架、训练记录、饮食记录、打卡、体重腰围、示范视频链接。可以在「设置 → 数据与备份」导出成一份 JSON 自己留着，也能导回来。清空浏览器数据就没了，所以导出是唯一的保底。
+## 目录结构
 
-登录是可选的，两种登录方式都支持：**账号密码**（本机起了后端就能注册，不需要任何第三方应用）和**支付宝授权**（要在开放平台建应用）。云端那张 `users` 表只有账号名或支付宝 uid 的后四位、订阅状态和会话；训练和饮食的内容不点「传到云端」就一个字节都不上来，点了也是按账号存一份整档，随时能删，注销账号连着一起删。口令只存 PBKDF2-HMAC-SHA256 的散列，明文不落库，忘了找不回来。
+```text
+fitness-planner/
+├─ backend/          Spring Boot 后端（Maven）
+│  ├─ src/main/java/com/fitplan/
+│  │  ├─ auth/       认证、JWT、限流
+│  │  ├─ admin/      管理后台、审计日志
+│  │  ├─ config/     安全、跨域、数据库初始化
+│  │  ├─ service/    账号、记录、支付、支付宝
+│  │  └─ web/        记录/支付/会话接口
+│  └─ settings.xml   Maven 阿里云镜像
+├─ frontend/         React 前端（Vite）
+│  └─ src/
+│     ├─ pages/      页面
+│     ├─ lib/        存储、接口、计划与营养算法
+│     └─ components/ 通用组件
+├─ server/
+│  ├─ schema.sql     数据库 DDL（启动时自动执行）
+│  └─ .env.example   环境变量模板
+├─ docs-framework/   PRD、架构、数据库、API、数据流转与部署契约
+└─ start.bat         Windows 一键启动
+```
 
-大模型 Key 由使用者自己填，明文存在本机浏览器里，不上传 —— 共用设备上不要填。
+## 本地运行
 
-## 跑起来
+### 1. 环境要求
 
-```bash
+- JDK 17+
+- Maven 3.9+
+- Node.js 18+
+- MySQL 8（本机 3306）
+- Redis 5+（本机 6379，可选；不可用时登录限流退回内存计数）
+
+### 2. 配置环境变量
+
+```powershell
+Copy-Item server\.env.example server\.env
+```
+
+编辑 `server/.env`，至少填写 `MYSQL_PASSWORD`，并把 `JWT_SECRET`、`ADMIN_PASSWORD` 换成自己的值。`server/.env` 已被 `.gitignore` 排除，不会进入仓库。
+
+### 3. 启动
+
+Windows 下可直接双击 `start.bat`（会尝试启动 `D:\Redis` 和后端）。
+
+手动启动：
+
+```powershell
+# 后端
+cd backend
+mvn -s settings.xml spring-boot:run
+
+# 前端（另开终端）
+cd frontend
 npm install
-npm run dev       # http://localhost:5173
-npm run build     # 产物在 dist/
-npm run preview   # http://localhost:8082
+npm run dev
 ```
 
-需要 Node 20 以上。
+数据库和表由后端启动时自动创建（读取 `server/schema.sql`），已有库会自动补列，不需要手工删表。
 
-## 目录
+### 4. 初始管理员
 
-| 路径 | 内容 |
-| --- | --- |
-| `src/` | 前端，React 19 + Vite 8，JavaScript |
-| `src/engine/` | 排课、重量推算、记录汇总、饮食估算、体重腰围走势，全部是纯函数 |
-| `src/videoSeed.js` | 动作 → 示范视频链接 |
-| `qa/` | 46 组场景、273 条断言，跑的是 `src/engine/` |
-| `server/schema.sql` | 云端十张表的 DDL |
-| `backend/` | Spring Boot 3.2.11 / Java 17 的登录、备份、收款接口 |
+后端首次启动时，如果数据库里还没有 `ADMIN` 账号，会用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_NICKNAME` 创建一个；已有管理员不会被覆盖。登录后请尽快在「设置 → 账号」修改默认密码。
 
-## 测试
+### 5. 容器化（可选）
 
-```bash
-node node_modules/rolldown/bin/cli.mjs qa/engine-test.js --format esm -o qa/out.mjs && node qa/out.mjs
+```powershell
+Copy-Item docker.env.example .env
+# 修改 .env 中的 MYSQL_ROOT_PASSWORD、JWT_SECRET、ADMIN_PASSWORD
+docker compose up -d --build
 ```
 
-## 后端（可选）
+启动后访问 `http://localhost`。容器内固定关闭体验免密登录；MySQL 数据通过 `mysql_data` 卷持久化，首次启动自动执行 `server/schema.sql`。
 
-前端默认请求同源的 `/api`，不跑后端也能用；没连上时登录和云端备份那几处会直接说连不上，本机记录不受影响。
+## 访问地址
 
-```bash
-# 1. 建库
-mysql -u root -p -e "CREATE DATABASE fitplan DEFAULT CHARSET utf8mb4"
+| 服务 | 地址 |
+|---|---|
+| 前端 | http://127.0.0.1:5173 |
+| 后端 | http://127.0.0.1:8787 |
+| 健康检查 | http://127.0.0.1:8787/api/health |
+| OpenAPI | http://127.0.0.1:8787/swagger-ui/index.html |
+| 管理后台 | 管理员登录后进入 `#/admin` |
 
-# 2. 配凭据
-cp server/.env.example server/.env   # 填 MySQL 口令；server/.env 已在 .gitignore 里
+## 主要配置项
 
-# 3. 起服务（默认 8787，和 vite.config.js 的代理目标一致）
-npm run api:build
-npm run api
-```
+| 变量 | 说明 |
+|---|---|
+| `MYSQL_*` | 数据库连接 |
+| `REDIS_HOST` / `REDIS_PORT` | Redis 地址 |
+| `JWT_SECRET` | JWT 签名密钥，生产必须更换 |
+| `JWT_EXPIRE_MINUTES` | JWT 有效期，默认 120 分钟 |
+| `DEMO_LOGIN_ENABLED` | 本地验证用的免密快捷登录（体验用户/体验管理员），生产必须为 `false` |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_NICKNAME` | 初始管理员 |
+| `FITPLAN_FRONT` | 支付宝授权后跳回的前端地址 |
+| `FITPLAN_ORIGINS` | 允许跨域的来源，逗号分隔 |
+| `FITPLAN_PUBLIC_BASE` | 支付宝异步通知的公网地址 |
+| `ALIPAY_*` | 支付宝应用凭据，不配置则无法收款与退款 |
 
-支付宝授权登录和收款要在开放平台建应用，把 `ALIPAY_APP_ID`、应用私钥、支付宝公钥填进环境变量，`FITPLAN_PUBLIC_BASE` 必须是支付宝服务器打得到的公网地址，否则收不到异步通知。没配支付宝也不影响登录：账号密码那一套是独立的。
+完整说明见 [部署文档](docs-framework/05_Deployment.md)。
 
-`/api/health` 默认只回 `db` / `alipay` / `pay` 三个状态，缺哪些环境变量、CORS 白名单里有谁都不写在回应里 —— 挂着公网时这是给陌生人看的。自己排查时把 `FITPLAN_HEALTH_DETAIL=1` 打开再访问就有全部细节。
+## 文档
 
-## 云端备份的覆盖保护
+- [01 · 产品需求](docs-framework/01_PRD.md)
+- [02 · 架构设计](docs-framework/02_Architecture.md)
+- [03 · 数据库设计](docs-framework/03_Database.md)
+- [04 · API 接口](docs-framework/04_API.md)
+- [05 · 部署说明](docs-framework/05_Deployment.md)
+- [数据流转](docs-framework/flow/)
+- [接口契约评审](docs-framework/review/01_contract_review.md)
+- [代码审查报告](docs-framework/review/02_code_review.md)
 
-「传到云端」是整份覆盖，所以每次上传会带上本机上一次看到的云端时间戳（存在 `localStorage` 的 `fitplan.cloud`）。后端发现库里那份比这个时间新，就回 409 不写，界面上会问一句「先拉回来看看，还是确定用本机这份覆盖」—— 另一台设备刚传过东西的时候，这一句就是防你把别人的记录盖掉。
+## 安全说明
 
-## 账号密码登录
-
-后端起来就有这两个接口，不需要任何第三方应用：
-
-```bash
-curl -X POST localhost:8787/api/auth/register -H 'Content-Type: application/json' \
-  -d '{"loginName":"lin_01","password":"xxxxxxxx"}'      # 换成 /api/auth/login 就是登录
-```
-
-回 `{token, kind, handle, plan}`，前端把 token 存进 `localStorage` 之后的会话接口都靠它。约束：账号名 3–32 个字符（存的时候统一小写），口令 8–64 位且不能全是数字；同一个「账号名 + 来源地址」连错 8 次冷十五分钟。库里存的是 `PBKDF2-HMAC-SHA256`（12 万次迭代、16 字节随机盐）的散列，不是明文也不是可逆加密。
-
-## 让线上站点也能登录（内网穿透）
-
-线上那份站点是纯静态的，同源没有 `/api`。要把本机后端挂出去，先起隧道：
-
-```bash
-npm run api                                   # 本机 8787
-npm run tunnel                                # 打印一个 https://xxxx.trycloudflare.com 的公网地址
-```
-
-然后在「设置 → 数据与备份 → 后端地址」里填上 `https://xxxx.trycloudflare.com/api` 保存，全站立刻走这个地址；点「用同源」就退回本机没后端的状态。支付宝的异步通知也要打这个地址，所以收款时还得把它写进 `FITPLAN_PUBLIC_BASE` 再重启后端。
-
-隧道每次启动换一个域名，而且本机服务一关线上就断 —— 这条链路适合联调和演示，不适合长期给陌生用户用。
+- 不提交 `server/.env`、构建产物和依赖目录
+- 生产环境务必更换 `JWT_SECRET` 与管理员密码
+- 密码使用 BCrypt 存储；JWT 登出后进入 Redis 黑名单
+- 退款走支付宝真实退款接口，未配置支付宝时会拒绝，不会产生“假退款”

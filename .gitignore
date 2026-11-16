@@ -1,9 +1,23 @@
+# 依赖与构建产物
 node_modules/
 dist/
-backend/target/
-qa/*.mjs
-qa/last.txt
-.idea/
+target/
+*.class
+*.jar
+
+# 本地环境变量与密钥
+.env
+.env.*
+!.env.example
 server/.env
-*.tsbuildinfo
+
+# IDE 与系统文件
+.idea/
+.vscode/
+*.iml
+Thumbs.db
 .DS_Store
+
+# 日志与本地截图
+*.log
+.screenshots/

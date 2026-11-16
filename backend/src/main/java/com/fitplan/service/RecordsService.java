@@ -96,17 +96,6 @@ public class RecordsService {
         this.jdbc = jdbc;
     }
 
-    /**
-     * 云端这一份是什么时候传上来的 —— 每次整份覆盖都会重写 profiles 那一行，所以它的 uploaded_at
-     * 就是整个快照的时间戳。客户端传回来时带上它看过的那个值，服务端就能认出「你按半小时前的
-     * 那一份在覆盖别人刚传上来的这一份」。
-     */
-    public Instant cloudStamp(long userId) {
-        List<Map<String, Object>> rows = jdbc.queryForList(
-            "SELECT uploaded_at FROM profiles WHERE user_id = ? LIMIT 1", userId);
-        return rows.isEmpty() ? null : AccountService.instantOf(rows.get(0).get("uploaded_at"));
-    }
-
     /** 整份替换：传进来的这套就是云端这一类的全集。 */
     @Transactional
     public Map<String, Object> replaceRecords(long userId, JsonNode data) {
