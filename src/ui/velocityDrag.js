@@ -11,11 +11,13 @@ const DROP_FRICTION = 0.58;
 const SETTLE_DIST = 0.5;
 const SETTLE_SPEED = 0.5;
 const SLOP = 6;
+/** 按住不动满一秒才允许拖：卡片大半屏，滑一下就跟着跑会误触 */
+const HOLD_MS = 1000;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /**
- * 拖卡片换日期：ghost 跟手带速度倾斜，悬停到哪一天就变身显示那一天，
- * 松手弹簧落进目标卡片；没拖够 6px 算点按。参数照参考实现 velocity-drag。
+ * 拖卡片换日期：先按住 1 秒，卡片亮起来之后才跟手 —— ghost 带速度倾斜，
+ * 悬停到哪一天就变身显示那一天，松手弹簧落进目标卡片；一秒内的点按仍是「看那天」。
  */
 export function useVelocityDrag({ enabled, onDrop, onPick, labelFor, targetSelector, cardSelector }) {
     const [draggingDate, setDraggingDate] = useState(null);
@@ -30,8 +32,9 @@ export function useVelocityDrag({ enabled, onDrop, onPick, labelFor, targetSelec
         raf.current = 0;
         const s = st.current;
         if (s) {
+            clearTimeout(s.holdTimer);
             s.ghost.remove();
-            s.cardEl.classList.remove('vd-src');
+            s.cardEl.classList.remove('vd-src', 'vd-arm');
         }
         st.current = null;
         setDraggingDate(null);
@@ -90,10 +93,18 @@ export function useVelocityDrag({ enabled, onDrop, onPick, labelFor, targetSelec
             return;
         s.tx = e.clientX;
         s.ty = e.clientY;
+        if (s.mode === 'hold') {
+            // 一秒没到就动了：当这次没按，不拖也不算点按
+            if (Math.abs(e.clientX - s.sx) + Math.abs(e.clientY - s.sy) < SLOP)
+                return;
+            stop();
+            return;
+        }
         if (s.mode === 'maybe') {
             if (Math.abs(e.clientX - s.sx) + Math.abs(e.clientY - s.sy) < SLOP)
                 return;
             s.mode = 'drag';
+            s.cardEl.classList.remove('vd-arm');
             s.cardEl.classList.add('vd-src');
             s.ghost.classList.add('on', 'is-morphing');
             setDraggingDate(s.date);
@@ -120,6 +131,14 @@ export function useVelocityDrag({ enabled, onDrop, onPick, labelFor, targetSelec
         const s = st.current;
         if (!s)
             return;
+        if (s.mode === 'hold') {
+            // 还没按满一秒：松手就是普通的点一下，选那天看
+            const date = s.date;
+            stop();
+            if (commit)
+                cb.current.onPick(date);
+            return;
+        }
         if (s.mode === 'maybe') {
             const date = s.date;
             stop();
@@ -167,9 +186,18 @@ export function useVelocityDrag({ enabled, onDrop, onPick, labelFor, targetSelec
                 px: e.clientX, py: e.clientY, vx: 0, vy: 0,
                 rx: 0, ry: 0, rz: 0, sc: 1,
                 dx: e.clientX, dy: e.clientY,
-                mode: 'maybe', over: null,
+                mode: 'hold', over: null,
+                holdTimer: 0,
                 reduced: window.matchMedia('(prefers-reduced-motion: reduce)').matches
             };
+            // 一秒内没挪动才解锁拖动，卡片亮一圈告诉他已经可以拽了
+            const s = st.current;
+            s.holdTimer = setTimeout(() => {
+                if (st.current !== s || s.mode !== 'hold')
+                    return;
+                s.mode = 'maybe';
+                cardEl.classList.add('vd-arm');
+            }, HOLD_MS);
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
             window.addEventListener('pointercancel', cancel);

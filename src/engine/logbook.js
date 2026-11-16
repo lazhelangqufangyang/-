@@ -1,4 +1,5 @@
 import { byId } from './exercises.js';
+import { AREA_OPTIONS, isPrimeFor } from './areas.js';
 import { weekdayName } from './goals.js';
 import { addDaysIso, todayIso, weekdayOf } from './time.js';
 /**
@@ -81,6 +82,12 @@ function partsOf(dayLogs, dayActs) {
         .slice(0, 2)
         .map(([k]) => k);
 }
+/** 这个动作按主动肌归到哪个部位：记录页的「已完成」按它分组 */
+function partOf(ex) {
+    if (!ex)
+        return '其他';
+    return AREA_OPTIONS.find((a) => isPrimeFor(ex, a)) ?? (ex.pattern === 'cardio' ? '有氧' : '其他');
+}
 function topLog(logs) {
     const loaded = logs.filter((l) => l.weightKg !== null);
     if (loaded.length)
@@ -134,10 +141,20 @@ export function buildEntries(sheets, logs, acts) {
             tonnage += mine.reduce((sum, l) => sum + setTonnage(l, ex), 0);
             const top = topLog(mine);
             lines.push({
+                exId,
+                part: partOf(ex),
                 name: `${ex?.name ?? exId}${lane === 'ramp' ? ' · 递增热身' : ''}`,
                 unit,
                 sets: mine.length,
                 perSet: mine.map((l) => setLabel(l, unit)),
+                rows: mine.map((l) => ({
+                    idx: l.setIdx,
+                    weightKg: l.weightKg,
+                    reps: l.reps,
+                    rpe: l.rpe ?? null,
+                    fail: !!l.toFailure,
+                    dropSteps: l.dropSteps ?? null
+                })),
                 top: top ? `${top.weightKg === null ? '自重' : fmtLoad(top.weightKg, unit)} × ${top.reps}` : '—',
                 best: lane === 'work' && isNewBest(logs, exId, date)
             });
@@ -220,6 +237,15 @@ export function daySquares(entries, to, weeks = 6) {
         });
     }
     return out;
+}
+/** 要把最早那条记录也画进格子需要几周：页面默认只画三周，剩下的点「全部」再看 */
+export function weeksToCover(entries, to) {
+    if (!entries.length)
+        return 3;
+    const earliest = entries.reduce((m, e) => (e.date < m ? e.date : m), to);
+    const last = addDaysIso(to, 6 - colOf(to));
+    const days = Math.round((Date.parse(last) - Date.parse(earliest)) / 86400000) + 1;
+    return Math.max(3, Math.ceil(days / 7));
 }
 /** 单个动作在本机的最近 n 次记录，动作详解抽屉里用 */
 export function exerciseHistory(exId, logs, n = 5) {

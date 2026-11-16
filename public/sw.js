@@ -1,10 +1,10 @@
-const CACHE = 'fitplan-v41';
+const CACHE = 'fitplan-v50';
 const CORE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/splash.jpg',
-  '/splash/silver.png',
+  '/splash/spartan.png',
   '/splash/storm.jpg',
   '/splash/clouds.jpg',
   '/splash/helmet.jpg',

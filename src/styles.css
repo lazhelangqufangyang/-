@@ -501,6 +501,14 @@ textarea {
   flex: 1;
 }
 
+/* 并排两颗按钮时别按整宽算：否则长文案会被挤成两行 */
+.btnbar .btn.big {
+  width: auto;
+  height: 52px;
+  min-height: 52px;
+  font-size: 15.5px;
+}
+
 /* 支付宝还没开通时，登录那颗按钮点不动但要看得见 */
 .btn.primary.off {
   opacity: 0.45;
@@ -1985,7 +1993,22 @@ textarea {
 }
 
 /* ---------- 记录页的每天一格 ---------- */
-/* 六行七列一次摊开，不再横向滑：滑着看的时候谁也数不出这周练了几天 */
+/* 默认三行七列摊开，更早的点「全部」再一次摊全：滑着看的时候谁也数不出这周练了几天 */
+.lb-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lb-range-btn {
+  flex: none;
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+
 .lb-week-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -2096,6 +2119,70 @@ textarea {
   padding: 8px 12px;
   min-height: 40px;
   font-size: 13.5px;
+}
+
+/* 日历下面接着「已完成」：同一张卡，做完的动作按部位分组往下排 */
+.lb-done-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.lb-done-head b {
+  flex: none;
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.lb-done-when {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.lb-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 0 2px;
+}
+
+.lb-part {
+  margin-top: 6px;
+}
+
+.lb-part-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.lb-part-head b {
+  font-size: 12.5px;
+  font-weight: 660;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+/* 记录里的动作块跟练的时候同一个写法：标题行 + 每组的 setline */
+.lb-ex {
+  margin-top: 8px;
+}
+
+.lb-ex .setlist {
+  margin-top: 4px;
+}
+
+.lb-set {
+  cursor: default;
 }
 
 /* ---------- 设置：模块按钮列表 ---------- */
@@ -2920,54 +3007,132 @@ textarea {
   border-style: dashed;
 }
 
-.pb-day {
+/* 计划表：照片垫底 + 白纱保证读得清，行本身就是换动作的入口 */
+.pb-sheet {
+  position: relative;
   margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: url('/plan.jpg') center 32% / cover no-repeat;
+  box-shadow: 0 2px 10px rgba(22, 24, 29, 0.07);
 }
 
-.pb-day-head {
+.pb-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.66) 0%, rgba(255, 255, 255, 0.9) 84px, rgba(255, 255, 255, 0.94) 100%);
+}
+
+.pb-sheet > * {
+  position: relative;
+}
+
+.pb-sheet-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 12px 14px 8px;
 }
 
-.pb-day-head b {
+.pb-sheet-head b {
   font-size: 16px;
 }
 
-.pb-day-note {
-  margin: 6px 0 2px;
+.pb-sheet-tip {
+  margin-left: auto;
 }
 
-.pb-day-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--line);
+.pb-table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.pb-day-row:last-child {
+.pb-table th {
+  padding: 4px 14px 6px;
+  font-size: 11px;
+  font-weight: 560;
+  color: var(--text-faint);
+  text-align: left;
+  border-bottom: 1px solid rgba(22, 24, 29, 0.1);
+}
+
+.pb-th-i {
+  width: 30px;
+}
+
+.pb-th-d {
+  text-align: right;
+}
+
+.pb-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(22, 24, 29, 0.07);
+  vertical-align: top;
+}
+
+.pb-table tbody tr:last-child td {
   border-bottom: 0;
-  padding-bottom: 2px;
+}
+
+.pb-tr {
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.pb-tr:hover {
+  background: rgba(253, 236, 239, 0.72);
+}
+
+.pb-tr:active {
+  background: rgba(247, 195, 202, 0.55);
+}
+
+.pb-tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pb-tr.static {
+  cursor: default;
+}
+
+.pb-tr.static:hover,
+.pb-tr.static:active {
+  background: none;
 }
 
 .pb-i {
-  width: 18px;
-  flex: none;
+  width: 30px;
   font-size: 12px;
   color: var(--text-faint);
 }
 
-.pb-day-row b {
-  flex: 1;
-  min-width: 0;
+.pb-name b {
+  display: block;
   font-size: 14px;
   font-weight: 620;
+  color: var(--text);
 }
 
-.pb-day-row .num {
+.pb-name span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.pb-dose {
   font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pb-sheet-note {
+  padding: 8px 14px 12px;
 }
 
 .pb-bar {
@@ -3006,6 +3171,13 @@ textarea {
 
 .pb-card:active {
   cursor: grabbing;
+}
+
+/* 按住满一秒解锁拖动：亮一圈，说明现在拽得动了 */
+.pb-card.vd-arm {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  transform: scale(1.01);
 }
 
 /* 编辑态：日期轨吸顶当落区，滚到第几张卡片都拖得回本周任何一天 */
@@ -3069,56 +3241,12 @@ textarea {
   box-shadow: none;
 }
 
-.pb-editor {
-  margin-top: 10px;
-}
-
-.pb-editor-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.pb-editor-head b {
-  font-size: 14.5px;
-}
-
-.pb-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.pb-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.pb-row-main b {
-  font-size: 13.5px;
-  font-weight: 620;
-}
-
-.pb-row-main .num {
-  font-size: 12px;
-}
-
-.pb-row .btn {
-  padding: 4px 10px;
-  min-height: 30px;
-  font-size: 12.5px;
-}
-
-.pb-add {
-  margin-top: 10px;
+.pb-pick-del {
   width: 100%;
+  margin-bottom: 8px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .pb-pick {
@@ -3285,5 +3413,105 @@ body::after {
   body::after {
     background-size: 480px 100%;
     opacity: 0.85;
+  }
+}
+
+/* ---------- 记上一条之后：那一格像被水从底下灌满 ----------
+   本站自己写的两层背景，不是第三方着色器：上面一条 120×12 的波峰 tile（横向平铺，起止点和切线对称，接缝看不出），
+   下面一片实心；整层用 translateY 涨上来，同时 background-position-x 每 120px 走一圈，浪就横向推着走。
+   颜色必须跟 --accent-soft 一致（SVG 里写死，因为 data URI 里用不了 CSS 变量）。
+   动画跑完 JS 就把 .flood 摘掉，格子露出自己本来的 .done 实心样子 —— 这层不改变「这天算不算练过」的判据，只是把手已经做的事演一遍。 */
+.lb-sq {
+  /* 虚线框到实心框别硬跳 */
+  transition: background-color 300ms ease, border-color 300ms ease;
+}
+
+@keyframes lb-flood {
+  from {
+    transform: translate3d(0, 101%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes lb-lap {
+  from {
+    background-position-x: 0, 0;
+  }
+  to {
+    background-position-x: 120px, 0;
+  }
+}
+
+.lb-sq.flood {
+  position: relative;
+  overflow: hidden;
+  /* 有了自己的层叠上下文，水才落在「自己背景之上、文字之下」，不会把日号盖掉 */
+  isolation: isolate;
+}
+
+.lb-sq.flood::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'><path d='M0 7 C15 1.5 45 1.5 60 7 C75 12.5 105 12.5 120 7 L120 12 L0 12 Z' fill='%23f7c3ca'/></svg>"), linear-gradient(var(--accent-line), var(--accent-line));
+  z-index: -1;
+  background-repeat: repeat-x, no-repeat;
+  background-size: 120px 12px, 100% calc(100% - 11px);
+  background-position: 0 0, 0 11px;
+  transform: translate3d(0, 101%, 0);
+  animation: lb-flood 620ms cubic-bezier(0.25, 0.9, 0.3, 1) forwards, lb-lap 1.8s linear infinite;
+}
+
+/* 系统要求减少动态：水直接到位，不演涨水的过程 */
+@media (prefers-reduced-motion: reduce) {
+  .lb-sq.flood::before {
+    animation: none;
+    transform: none;
+  }
+}
+
+/* ---------- 灌入的第二支：从上往下倒 ----------
+   同一块水、同一个浪，只是行进方向反过来：打卡「记下这次」和记完一组都是「东西落进去」，倒比涨更对得上手的方向。
+   浪尖这时贴在底边（background-position 的 y 换成 100%），实心块占上面那一段。 */
+@keyframes lb-pour {
+  from {
+    transform: translate3d(0, -101%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.flood-down {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.flood-down::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'><path d='M0 7 C15 1.5 45 1.5 60 7 C75 12.5 105 12.5 120 7 L120 12 L0 12 Z' fill='%23f7c3ca'/></svg>"), linear-gradient(var(--accent-line), var(--accent-line));
+  z-index: -1;
+  background-repeat: repeat-x, no-repeat;
+  background-size: 120px 12px, 100% calc(100% - 11px);
+  background-position: 0 100%, 0 0;
+  transform: translate3d(0, -101%, 0);
+  animation: lb-pour 620ms cubic-bezier(0.25, 0.9, 0.3, 1) forwards, lb-lap 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flood-down::before {
+    animation: none;
+    transform: none;
   }
 }

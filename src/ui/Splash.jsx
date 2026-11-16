@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import '../splash.css';
 
 const W = 1792;
-const H = 984;
+const H = 1024;
 
-const HEAD = [[400, 10], [560, 10], [620, 60], [610, 160], [560, 265], [480, 270], [420, 250], [400, 160], [394, 80]];
-const ARM = [[556, 295], [660, 330], [700, 420], [690, 520], [640, 660], [575, 690], [556, 600], [566, 470], [548, 380]];
-const CAPE = [[620, 240], [760, 255], [1000, 215], [1400, 175], [1792, 195], [1792, 984], [1200, 984], [900, 900], [760, 760], [680, 600], [640, 420], [600, 300]];
+/** 头盔和羽饰：从羽冠顶到护颊下沿，尾巴往右扫到肩甲上缘 */
+const HEAD = [[370, 135], [372, 95], [382, 62], [400, 40], [440, 24], [500, 24], [540, 48], [572, 92], [590, 140], [622, 196], [648, 260], [660, 310], [648, 330], [610, 326], [575, 318], [535, 320], [495, 322], [458, 326], [430, 315], [404, 300], [386, 255], [376, 200]];
+/**
+ * 披风：内缘贴着肩甲、护腕和手的右侧走（宁可留一条静止的窄边，也不能把盔甲切进披风里），
+ * 外缘和上下缘放宽到整块画布，多出来的都是透明像素，不影响观感。
+ */
+const CAPE = [[620, 300], [682, 335], [700, 372], [700, 420], [695, 500], [700, 565], [680, 615], [660, 660], [716, 700], [722, 750], [748, 810], [790, 865], [850, 915], [925, 960], [1010, 1000], [1100, 1015], [1250, 1020], [1450, 1000], [1620, 955], [1792, 920], [1792, 300], [1740, 285], [1650, 268], [1550, 252], [1440, 248], [1330, 232], [1220, 238], [1110, 222], [1000, 232], [900, 250], [810, 270], [730, 280], [678, 286]];
 
 function scaled(poly, s) {
     const cx = poly.reduce((a, p) => a + p[0], 0) / poly.length;
@@ -44,14 +48,13 @@ export default function Splash({ onEnter }) {
         let dead = false;
         img.onload = () => {
             if (dead || !host.current) return;
-            const body = cut(img, [[[HEAD, ARM], 0.9], [[CAPE], 1]], 'destination-out');
+            const body = cut(img, [[[HEAD], 0.9], [[CAPE], 1]], 'destination-out');
             const bg = body.getContext('2d');
             bg.globalCompositeOperation = 'destination-over';
             bg.drawImage(cut(img, [[[CAPE], 1]], 'destination-in'), 0, 0);
             const layers = [
                 [body, 'sp-body'],
                 [cut(img, [[[CAPE], 1.03]], 'destination-in'), 'sp-cape'],
-                [cut(img, [[[ARM], 1.1]], 'destination-in'), 'sp-arm'],
                 [cut(img, [[[HEAD], 1.1]], 'destination-in'), 'sp-head']
             ];
             for (const [c, cls] of layers) {
@@ -59,7 +62,7 @@ export default function Splash({ onEnter }) {
                 host.current.appendChild(c);
             }
         };
-        img.src = '/splash/silver.png';
+        img.src = '/splash/spartan.png';
         return () => {
             dead = true;
             clearTimeout(timer.current);
@@ -93,15 +96,22 @@ export default function Splash({ onEnter }) {
           <img src="/splash/helmet.jpg" alt="" />
         </div>
         <div className="sp-helm-shadow" aria-hidden="true" />
-        <div className="sp-figure" ref={host} />
+        <div className="sp-figure" ref={host}>
+          <div className="sp-eyes" aria-hidden="true" />
+        </div>
+        <blockquote className="sp-quote">
+          <p className="sp-quote-greek">ΚΑΡΤΕΡΙΑ</p>
+          <p className="sp-quote-cn">汗水铸就锋芒</p>
+          <p className="sp-quote-src">斯巴达法则 · 铸就强者之躯</p>
+        </blockquote>
         <svg className="sp-defs" aria-hidden="true" focusable="false">
           <defs>
             <filter id="sp-water" x="-20%" y="-20%" width="140%" height="140%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="2" seed="7" result="n">
-                {!reduced && <animate attributeName="baseFrequency" dur="9s" values="0.012 0.028;0.017 0.036;0.012 0.028" repeatCount="indefinite" />}
+              <feTurbulence type="fractalNoise" baseFrequency="0.009 0.021" numOctaves="2" seed="7" result="n">
+                {!reduced && <animate attributeName="baseFrequency" dur="9s" values="0.009 0.021;0.014 0.031;0.009 0.021" repeatCount="indefinite" />}
               </feTurbulence>
-              <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G">
-                {!reduced && <animate attributeName="scale" dur="6s" values="3;7;3" repeatCount="indefinite" />}
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="12" xChannelSelector="R" yChannelSelector="G">
+                {!reduced && <animate attributeName="scale" dur="7s" values="8;26;8" repeatCount="indefinite" />}
               </feDisplacementMap>
             </filter>
           </defs>

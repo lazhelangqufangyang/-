@@ -39,6 +39,14 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
     const [swapOpen, setSwapOpen] = useState(null);
     /** 删一组要点两次：这一组记下的次数会跟着没，原生 confirm 在全屏 PWA 里又丑又容易被忽略 */
     const [cutArmed, setCutArmed] = useState(null);
+    /** 刚记下那一组：行上倒一次水，倒完摘掉类名 */
+    const [floodKey, setFloodKey] = useState(null);
+    useEffect(() => {
+        if (!floodKey)
+            return undefined;
+        const t = setTimeout(() => setFloodKey(null), 700);
+        return () => clearTimeout(t);
+    }, [floodKey]);
     const [symptom, setSymptom] = useState('');
     const [aiReasons, setAiReasons] = useState({});
     const [aiBusy, setAiBusy] = useState(false);
@@ -174,6 +182,7 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
             ...(p.drop && steps.length ? { dropSteps: steps } : {})
         };
         onAddLogs([log]);
+        setFloodKey(setKey(slot.id, setIdx));
         setOpenKey(nextOpenKey(setKey(slot.id, setIdx)));
     };
     const toggleBlock = (slotId) => {
@@ -253,7 +262,7 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
                             : { weightKg: p.weightKg, reps: p.reps, rpe: p.rpe, fail: false };
                         return (<div className="setrow" key={key}>
                           <div className="setline">
-                            <button className={`setbtn ${rec ? 'done' : ''}`} onClick={() => (isOpen ? setOpenKey(null) : openLog(slot, i))} aria-expanded={isOpen}>
+                            <button className={`setbtn ${rec ? 'done' : ''}${floodKey === key ? ' flood-down' : ''}`} onClick={() => (isOpen ? setOpenKey(null) : openLog(slot, i))} aria-expanded={isOpen}>
                               <span className="idx num">
                                 第 {i + 1} 组{p.drop ? '｜递减' : ''}
                               </span>

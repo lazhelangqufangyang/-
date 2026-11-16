@@ -48,7 +48,7 @@ const CLEAR_FOR = {
     1: { sex: '', age: '', height: '', weight: '', bodyfat: '', bodyfatUnknown: true },
     2: { wish: '' }
 };
-export default function Onboarding({ initial, settings, editing, onDone, onExit }) {
+export default function Onboarding({ initial, settings, favorites = [], editing, onDone, onExit }) {
     const [step, setStep] = useState(1);
     const [d, setD] = useState(() => toDraft(initial));
     const [goal, setGoal] = useState(initial.goal);
@@ -104,7 +104,7 @@ export default function Onboarding({ initial, settings, editing, onDone, onExit 
             const p = toProfile(nd, initial);
             // 写了愿望但没点翻译：按本机规则翻一次，不背着他自己排一版目标；跳过这一问就丢掉旧翻译
             const g = dropGoal ? wishToGoal(p) : goal ?? wishToGoal(p);
-            const fw = buildFramework(p, g);
+            const fw = buildFramework(p, g, undefined, favorites);
             onDone({ ...p, goal: g }, g, fw);
             return;
         }

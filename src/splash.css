@@ -63,14 +63,14 @@
   z-index: 1;
   overflow: hidden;
   mix-blend-mode: screen;
-  opacity: 0.3;
-  mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 70%);
+  opacity: 0.6;
+  mask-image: linear-gradient(180deg, #000 0%, #000 46%, transparent 76%);
 }
 .sp-clouds-track {
   display: flex;
   width: 400%;
   height: 100%;
-  animation: sp-drift 40s linear infinite;
+  animation: sp-drift 16s linear infinite;
 }
 .sp-clouds-track img {
   width: 25%;
@@ -111,11 +111,11 @@
 }
 .sp-helm {
   position: absolute;
-  left: 4.5%;
+  right: 4.5%;
   bottom: 9%;
   width: 24%;
   aspect-ratio: 1;
-  z-index: 3;
+  z-index: 4;
 }
 .sp-helm img {
   width: 100%;
@@ -128,21 +128,21 @@
 }
 .sp-helm-shadow {
   position: absolute;
-  left: 6.5%;
+  right: 6.5%;
   bottom: 8%;
   width: 19%;
   height: 2.2%;
-  z-index: 2;
+  z-index: 3;
   background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, 0.6), transparent 70%);
   filter: blur(3px);
 }
 .sp-figure {
   position: absolute;
   left: 50%;
-  translate: -28% 0;
+  translate: -23% 0;
   bottom: 5.2%;
-  height: 62%;
-  aspect-ratio: 1792 / 984;
+  height: 56%;
+  aspect-ratio: 1792 / 1024;
   z-index: 3;
   animation: sp-figure-in 1.1s ease both;
 }
@@ -156,35 +156,89 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
+/* 披风：沿肩部为原点轻轻摆动，加上水波位移滤镜，金属布面一直在流 */
 .sp-cape {
   filter: url(#sp-water);
-  transform-origin: 40% 30%;
-  animation: sp-cape 7s ease-in-out infinite;
+  transform-origin: 34% 30%;
+  will-change: transform, filter;
+  animation: sp-cape 9s ease-in-out infinite;
 }
 @keyframes sp-cape {
-  0%, 100% { transform: rotate(-0.5deg) skewX(0.3deg); }
-  50% { transform: rotate(0.5deg) skewX(-0.4deg); }
+  0%, 100% { transform: rotate(-0.6deg) skewX(0.5deg) translateX(0); }
+  50% { transform: rotate(0.7deg) skewX(-0.7deg) translateX(0.45%); }
 }
 .sp-head {
-  transform-origin: 27% 25%;
+  transform-origin: 26% 31%;
   animation: sp-head 5.5s ease-in-out infinite;
 }
 @keyframes sp-head {
   0%, 100% { transform: rotate(-0.4deg) translateY(0); }
   50% { transform: rotate(0.4deg) translateY(0.2%); }
 }
-.sp-arm {
-  transform-origin: 33% 35%;
-  animation: sp-arm 8.5s ease-in-out infinite;
-}
-@keyframes sp-arm {
-  0%, 100% { transform: rotate(0.3deg); }
-  50% { transform: rotate(-0.3deg); }
-}
 .sp-defs {
   position: absolute;
   width: 0;
   height: 0;
+}
+.sp-eyes {
+  position: absolute;
+  left: 23.7%;
+  top: 20%;
+  width: 6%;
+  height: 4%;
+  translate: -50% -50%;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(closest-side, #fff8e6 0%, rgba(230, 196, 118, 0.85) 30%, rgba(230, 196, 118, 0.28) 60%, transparent 100%);
+  animation: sp-eyepulse 3.4s ease-in-out infinite;
+}
+.sp-eyes::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 16%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: #fffdf4;
+  box-shadow: 0 0 6px 2px rgba(255, 248, 230, 0.9), 0 0 18px 6px rgba(230, 196, 118, 0.55);
+}
+@keyframes sp-eyepulse {
+  0%, 100% { opacity: 0.78; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+.sp-quote {
+  position: absolute;
+  left: 5%;
+  bottom: 15%;
+  max-width: 56%;
+  margin: 0;
+  z-index: 4;
+}
+.sp-quote-greek {
+  margin: 0;
+  font: 600 0.68rem/1 Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.3em;
+  color: var(--sp-bronze-hi);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+.sp-quote-cn {
+  margin: 0.45rem 0 0;
+  font-family: var(--sp-serif);
+  font-weight: 900;
+  font-size: 1.06rem;
+  line-height: 1.3;
+  color: var(--sp-paper);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 2px 16px rgba(0, 0, 0, 0.6);
+}
+.sp-quote-src {
+  margin: 0.4rem 0 0;
+  font: 400 0.62rem/1.4 var(--sp-sans);
+  letter-spacing: 0.14em;
+  color: rgba(242, 239, 230, 0.62);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
 .sp-copy {
   position: absolute;
@@ -251,10 +305,11 @@
   font-size: 1.05em;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sp-bg img, .sp-clouds-track, .sp-cape, .sp-head, .sp-arm,
-  .sp-figure, .sp-eyebrow, .sp-title, .sp-enter {
+  .sp-bg img, .sp-clouds-track, .sp-cape, .sp-head,
+  .sp-figure, .sp-eyebrow, .sp-title, .sp-enter, .sp-eyes {
     animation: none;
   }
+  .sp-eyes { opacity: 0.9; }
   .splash.leaving {
     transition: none;
   }

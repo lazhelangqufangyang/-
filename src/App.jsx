@@ -17,7 +17,7 @@ import PlanPick from './ui/PlanPick.jsx';
 import PlanBoard from './ui/PlanBoard.jsx';
 import Welcome from './ui/Welcome.jsx';
 import Splash from './ui/Splash.jsx';
-import { pickUpTokenFromHash } from './api/account.js';
+import { pickUpTokenFromHash, sessionToken } from './api/account.js';
 import { weekdayName } from './engine/goals.js';
 const NAV_TABS = [
     { href: '#/train', label: '运动', ico: 'dumbbell' },
@@ -110,13 +110,15 @@ export default function App() {
 }
 function AppInner() {
     const [state, setState] = useState(() => loadState());
-    const [route, setRoute] = useState(() => normalize(window.location.hash, state.onboardingDone));
+    /** 登录过就不再把开头的欢迎页顶出来：换了设备登同一个账号也是直接进运动页 */
+    const entered = state.onboardingDone || Boolean(sessionToken());
+    const [route, setRoute] = useState(() => normalize(window.location.hash, entered));
     const tabRef = useRef(tabOfRoute(route));
     /** 记一条运动时，动作要去「动作」页挑；这里存着还没提交的那一条 */
     const [recPick, setRecPick] = useState(null);
     useEffect(() => {
         const onHash = () => {
-            const next = normalize(window.location.hash, state.onboardingDone);
+            const next = normalize(window.location.hash, state.onboardingDone || Boolean(sessionToken()));
             const tab = tabOfRoute(next);
             if (tab)
                 tabRef.current = tab;
@@ -128,7 +130,7 @@ function AppInner() {
     // 支付宝登录回来时令牌挂在 URL 片段上：收进 localStorage、把地址栏洗干净
     useEffect(() => {
         if (pickUpTokenFromHash())
-            setRoute(normalize('#/settings', state.onboardingDone));
+            setRoute(normalize('#/settings', state.onboardingDone || Boolean(sessionToken())));
     }, [state.onboardingDone]);
     useEffect(() => {
         saveState(state);
@@ -196,7 +198,7 @@ function AppInner() {
                 return s;
             return {
                 ...s,
-                framework: buildFramework(s.profile, s.profile.goal, { id: s.framework?.id, startDate: s.framework?.startDate })
+                framework: buildFramework(s.profile, s.profile.goal, { id: s.framework?.id, startDate: s.framework?.startDate }, s.favorites)
             };
         });
     }, []);
@@ -209,7 +211,7 @@ function AppInner() {
         setState((s) => {
             const goal = s.profile.goal ?? null;
             const framework = goal
-                ? buildFramework({ ...nextProfile, goal }, goal, { id: s.framework?.id, startDate: s.framework?.startDate })
+                ? buildFramework({ ...nextProfile, goal }, goal, { id: s.framework?.id, startDate: s.framework?.startDate }, s.favorites)
                 : null;
             const todaySheet = s.sheets.find((x) => x.date === today) ?? null;
             const logged = todaySheet ? s.setLogs.some((l) => l.sheetId === todaySheet.id) : false;
@@ -349,11 +351,21 @@ function AppInner() {
             return { ...s, picked: next, pickedDate: today, sheets };
         });
     }, [today]);
+    /**
+     * 收藏就立刻影响本周计划：重排一遍框架，收藏的动作优先顶掉同主动肌的默认动作。
+     * 动作一个都没变时保留原框架，免得白冲掉本周在计划表里拖过的顺序。
+     */
     const toggleFavorite = useCallback((exId) => {
-        setState((s) => ({
-            ...s,
-            favorites: s.favorites.includes(exId) ? s.favorites.filter((x) => x !== exId) : [...s.favorites, exId]
-        }));
+        setState((s) => {
+            const favorites = s.favorites.includes(exId) ? s.favorites.filter((x) => x !== exId) : [...s.favorites, exId];
+            const goal = s.profile.goal ?? null;
+            if (!goal || !s.framework)
+                return { ...s, favorites };
+            const framework = buildFramework(s.profile, goal, { id: s.framework.id, startDate: s.framework.startDate }, favorites);
+            const same = framework.days.length === s.framework.days.length
+                && framework.days.every((d, i) => d.exerciseIds.join('|') === s.framework.days[i].exerciseIds.join('|'));
+            return { ...s, favorites, framework: same ? s.framework : framework };
+        });
     }, []);
     const addLogs = useCallback((logs) => {
         setState((s) => ({ ...s, setLogs: [...s.setLogs, ...logs] }));
@@ -389,16 +401,6 @@ function AppInner() {
     const removeMeal = useCallback((id) => {
         setState((s) => ({ ...s, mealLogs: s.mealLogs.filter((x) => x.id !== id) }));
     }, []);
-    const addMeasure = useCallback((m) => {
-        setState((s) => ({ ...s, measureLogs: [...s.measureLogs, m] }));
-    }, []);
-    const removeMeasureDay = useCallback((date) => {
-        setState((s) => ({ ...s, measureLogs: s.measureLogs.filter((x) => x.date !== date) }));
-    }, []);
-    /** 打卡的体重写进档案：热量参考立刻跟着走，力量参照等下一次重排框架时带上 */
-    const syncProfileWeight = useCallback((kg) => {
-        setState((s) => ({ ...s, profile: { ...s.profile, weightKg: kg } }));
-    }, []);
     const saveSettings = useCallback((settings) => patch({ settings }), [patch]);
     const importState = useCallback((next) => {
         setState(next);
@@ -410,11 +412,11 @@ function AppInner() {
         return <Welcome onDirect={chooseDirect} onPlan={choosePlan}/>;
     }
     if (route === 'setup') {
-        return <Onboarding initial={state.profile} settings={state.settings} editing={false} onDone={finishOnboarding}/>;
+        return <Onboarding initial={state.profile} settings={state.settings} favorites={state.favorites} editing={false} onDone={finishOnboarding}/>;
     }
     // 「我的档案」搬进设置了，但它本身是整屏的分步表单，跟训练执行页一样不套底部导航
     if (route === 'settings/profile') {
-        return (<Onboarding initial={state.profile} settings={state.settings} editing onExit={() => go('#/settings')} onDone={(profile, _goal, framework) => {
+        return (<Onboarding initial={state.profile} settings={state.settings} favorites={state.favorites} editing onExit={() => go('#/settings')} onDone={(profile, _goal, framework) => {
                 setState((s) => ({ ...s, profile, framework: framework ?? null }));
                 go('#/settings');
             }}/>);
@@ -436,7 +438,7 @@ function AppInner() {
           <main className="screen">
             {tab === 'train' ? (<TrainView profile={state.profile} framework={state.framework} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} onGenerate={generateToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onMoveDay={movePlanDay} onEditDay={editPlanDay} onApplyProfile={applyTweak} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'moves' ? (<ExerciseView profile={state.profile} favorites={state.favorites} picked={pickedToday} logs={state.setLogs} date={today} onToggleFavorite={toggleFavorite} onTogglePick={togglePick} pickFor={recPick?.date ?? null} recordPicks={recPick?.exIds ?? []} onToggleRecordPick={toggleRecPick} onFinishRecordPick={endRecPick}/>) : null}
-            {tab === 'log' ? (<LogbookView sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} measures={state.measureLogs} goal={state.profile.goal} profileWeight={state.profile.weightKg} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={clearRecPick} onAdd={addActivity} onRemove={removeActivity} onRemoveDay={removeDayLogs} onAddMeasure={addMeasure} onRemoveMeasureDay={removeMeasureDay} onSyncProfileWeight={syncProfileWeight} onGoToday={() => go('#/train')}/>) : null}
+            {tab === 'log' ? (<LogbookView sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={clearRecPick} onAdd={addActivity} onRemove={removeActivity} onRemoveDay={removeDayLogs} onGoToday={() => go('#/train')}/>) : null}
             {tab === 'diet' ? (<DietView profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (<SettingsView state={state} sub={route === 'settings' ? '' : route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>) : null}
           </main>

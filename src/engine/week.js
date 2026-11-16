@@ -1,5 +1,5 @@
 import { byId, EXERCISES, fitsEquipment, homeSwap } from './exercises.js';
-import { isPrimeFor, ROLE_ONLY_AREAS } from './areas.js';
+import { AREA_CHOICES, isPrimeFor, ROLE_ONLY_AREAS } from './areas.js';
 import { injuryAreas, isHomeMode, resolveExercise, tierOf } from './load.js';
 import { weekdayName } from './goals.js';
 import { uid } from './time.js';
@@ -220,7 +220,43 @@ function placeExercise(ex, p, areas, note, home) {
     }
     return cur;
 }
-export function buildFramework(p, goal, keep) {
+/**
+ * 收藏的动作优先：和当天已排动作同主动肌的，顶掉排在后面的那个辅助动作；
+ * 这块肌肉只被主项练到、容量还够时，插在主项后面。伤病、器械、避让照样过 placeExercise。
+ */
+function preferFavorites(resolved, mainId, favorites, p, areas, note, home) {
+    // 按「主动肌属于哪个部位」认同类：肌肉名有「背阔」「背阔肌」这种写法差异，不能拿字符串直接比
+    const primeAreas = (ex) => AREA_CHOICES.filter((a) => isPrimeFor(ex, a));
+    for (const id of favorites) {
+        const ex = byId(id);
+        if (!ex || resolved.includes(ex.id))
+            continue;
+        const placed = placeExercise(ex, p, areas, note, home);
+        if (!placed || resolved.includes(placed.id))
+            continue;
+        const mine = primeAreas(placed);
+        const sameGroup = (x) => {
+            const e = byId(x);
+            if (!e)
+                return false;
+            const theirs = primeAreas(e);
+            return mine.length ? mine.some((a) => theirs.includes(a)) : e.muscles[0] === placed.muscles[0];
+        };
+        const idx = resolved.findIndex((x, i) => i > 0 && x !== mainId && sameGroup(x));
+        if (idx > 0) {
+            const old = byId(resolved[idx]);
+            resolved[idx] = placed.id;
+            const msg = old ? `${old.name} 换成 ${placed.name}（你收藏的动作优先排进来）` : '';
+            if (msg && !note.includes(msg))
+                note.push(msg);
+            continue;
+        }
+        if (resolved.length < 6 && resolved.some(sameGroup))
+            resolved.splice(1, 0, placed.id);
+    }
+    return resolved;
+}
+export function buildFramework(p, goal, keep, favorites = []) {
     const weeks = goal?.weeks ?? 8;
     const novice = tierOf(p) === 0;
     const given = p.weekdays ?? null;
@@ -298,6 +334,7 @@ export function buildFramework(p, goal, keep) {
                 resolved.unshift(mainId);
             }
         }
+        preferFavorites(resolved, mainId, favorites, p, areas, substitutions, home);
         return {
             weekday,
             focus: tuned.focus,

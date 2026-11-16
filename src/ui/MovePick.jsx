@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { BROWSE_AREAS, EXERCISES, fitsEquipment } from '../engine/exercises.js';
 import { isHomeMode } from '../engine/load.js';
 /** 给今天挑动作的一屏：点一下就是选上，再点一下撤掉，重量与组数不在这里定 */
-export default function MovePick({ profile, picked, favorites, onToggle, onDone, title = '加动作', doneLabel = '返回开始训练' }) {
+export default function MovePick({ profile, picked, favorites, onToggle, onDone, title = '加动作', doneLabel = '返回开始训练', extra = null }) {
     const [query, setQuery] = useState('');
     const [section, setSection] = useState('chest');
     const home = isHomeMode(profile);
@@ -75,6 +75,7 @@ export default function MovePick({ profile, picked, favorites, onToggle, onDone,
       </div>
 
       <div className="pick-foot">
+        {extra}
         <button className="btn primary big" onClick={onDone}>
           {doneLabel}{picked.length ? ` · 已选 ${picked.length} 个` : ''}
         </button>
