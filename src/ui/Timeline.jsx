@@ -58,6 +58,9 @@ export function SlotRow({ slot, order, dragging, dropTarget, dy, onOpen, onToggl
         }}>
       <div className="slot-top">
         <span className={`slot-index num${tone === 'main' ? ' main' : tone === 'compound' ? ' compound' : ''}`}>{order}</span>
+        <span className="drag-handle" aria-hidden="true" title="拖动排序" onPointerDown={(e) => onHandleDown(e, slot.id)} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp} onClick={(e) => e.stopPropagation()}>
+          <i/><i/><i/><i/><i/><i/>
+        </span>
         <div className="slot-title-wrap">
           <div className="slot-title-row">
             <h3>{title}</h3>
@@ -77,9 +80,6 @@ export function SlotRow({ slot, order, dragging, dropTarget, dy, onOpen, onToggl
           </button>
           <span className="slot-more">详解 <span aria-hidden="true">›</span></span>
         </div>
-        <span className="drag-handle" aria-hidden="true" title="拖动排序" onPointerDown={(e) => onHandleDown(e, slot.id)} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp} onClick={(e) => e.stopPropagation()}>
-          <i/><i/><i/><i/><i/><i/>
-        </span>
       </div>
 
       {isLift ? (<>

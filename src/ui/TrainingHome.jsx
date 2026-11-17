@@ -53,6 +53,7 @@ function Icon({ name, size = 18, className = '' }) {
         heart: <path d="M12 20s-7-4.35-7-9.3A3.9 3.9 0 0 1 12 7.9a3.9 3.9 0 0 1 7 2.8C19 15.65 12 20 12 20Z"/>,
         check: <path d="m5 12.5 4.3 4.3L19 7"/>,
         spark: <><path d="m12 2.8 1.8 5.2 5.2 1.8-5.2 1.8L12 16.8l-1.8-5.2L5 9.8l5.2-1.8L12 2.8Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
+        edit: <><path d="M4 20h4.2L19 9.2a2.1 2.1 0 0 0-3-3L5.2 17 4 20Z"/><path d="m14.8 7.4 2.8 2.8"/></>,
         moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8.2 8.2 0 1 0 10.5 10.5Z"/>,
         flame: <path d="M13.5 2.8c.5 3.1-2.2 4.4-2.8 7.1-.3-1.7-1.4-2.7-2.5-3.6-.3 1.7-1.1 2.7-2 4.1a5.7 5.7 0 1 0 9.8 4.4c.6-4.6-2.6-7.7-2.5-12Z"/>
     }[name];
@@ -177,17 +178,20 @@ function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip
     const focus = (isToday ? sheet?.focus : null) || day?.focus || (isToday ? '自由安排' : '休息日');
     return (<section className="plan-today">
       <div className="plan-heading">
-        <div>
+        <div className="plan-title-wrap">
           <span className="train-eyebrow">{isToday ? 'TODAY' : 'PLAN'}</span>
-          <h2>{isToday ? '今日计划' : `${weekdayName(weekdayOf(selected))}的计划`}</h2>
+          <h2>
+            {isToday ? '今日计划' : `${weekdayName(weekdayOf(selected))}的计划`}
+            <span className="plan-focus-inline">{focus}</span>
+          </h2>
         </div>
-        <div className="plan-heading-side">
-          <span className="plan-count num">{count} 个动作 · {sets} 组</span>
-          {isToday ? <button type="button" className="text-btn" onClick={onGoPlan}>调整</button> : null}
-        </div>
+        {isToday ? (<button type="button" className="adjust-link" onClick={onGoPlan}>
+            <Icon name="edit" size={14}/>
+            调整
+          </button>) : null}
       </div>
-      <div className="focus-row">
-        <span className="focus-name">{focus}</span>
+      <div className="plan-meta-line">
+        <span className="plan-count num">{count} 个动作 · {sets} 组</span>
         {isToday ? <span className="mini-chip accent">今天</span> : <button type="button" className="mini-chip" onClick={() => onSelect(today)}>回到今天</button>}
       </div>
       {isToday
@@ -426,10 +430,13 @@ export default function TrainingHome({
       {sticky ? (<div className="cta-dock">
         <button type="button" className="cta-main" onClick={freeLike ? onStartDirect : onStart} disabled={!freeLike && !canStartToday}>
           <span className="cta-main-copy">
-            <b>{freeLike ? '开始自由训练' : '开始今日训练'}</b>
+            <b>
+              {freeLike ? '开始自由训练' : '开始今日训练'}
+              {!freeLike && sheet ? <span className="cta-count"> ({sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).length} 个动作)</span> : null}
+            </b>
             <small>{freeLike
                 ? `${picked.length} 个动作 · 练到哪算哪`
-                : (sheet ? `${sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).length} 个动作 · ${sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).reduce((n, x) => n + x.setPlan.length, 0)} 组` : '按今天的计划开始')}</small>
+                : (sheet ? `${sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).reduce((n, x) => n + x.setPlan.length, 0)} 组 · 今天` : '按今天的计划开始')}</small>
           </span>
           <span className="cta-main-arrow"><Icon name="arrow" size={20}/></span>
         </button>

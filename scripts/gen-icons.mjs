@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = join(root, 'public', 'icons');
+const outDir = join(root, 'public', 'images');
 mkdirSync(outDir, { recursive: true });
 
 const BG = [242, 245, 241, 255];

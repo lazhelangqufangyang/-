@@ -62,7 +62,7 @@ export default function Splash({ onEnter }) {
                 host.current.appendChild(c);
             }
         };
-        img.src = '/splash/spartan.png';
+        img.src = '/images/spartan.png';
         return () => {
             dead = true;
             clearTimeout(timer.current);
@@ -85,15 +85,15 @@ export default function Splash({ onEnter }) {
 
     return (<div className={'splash' + (leaving ? ' leaving' : '')}>
       <div className="sp-stage">
-        <div className="sp-bg"><img src="/splash/storm.jpg" alt="" /></div>
+        <div className="sp-bg"><img src="/images/storm.jpg" alt="" /></div>
         <div className="sp-clouds" aria-hidden="true">
-          <div className="sp-clouds-track"><img src="/splash/clouds.jpg" alt="" /><img src="/splash/clouds.jpg" alt="" /><img src="/splash/clouds.jpg" alt="" /><img src="/splash/clouds.jpg" alt="" /></div>
+          <div className="sp-clouds-track"><img src="/images/clouds.jpg" alt="" /><img src="/images/clouds.jpg" alt="" /><img src="/images/clouds.jpg" alt="" /><img src="/images/clouds.jpg" alt="" /></div>
         </div>
         <div className="sp-scrim" />
         <div className="sp-ground" />
         <div className="sp-shadow" />
         <div className="sp-helm" aria-hidden="true">
-          <img src="/splash/helmet.jpg" alt="" />
+          <img src="/images/helmet.jpg" alt="" />
         </div>
         <div className="sp-helm-shadow" aria-hidden="true" />
         <div className="sp-figure" ref={host}>

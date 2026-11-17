@@ -1,22 +1,22 @@
-const CACHE = 'fitplan-v51';
+const CACHE = 'fitplan-v52';
 const CORE = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/splash.jpg',
-  '/splash/spartan.png',
-  '/splash/storm.jpg',
-  '/splash/clouds.jpg',
-  '/splash/helmet.jpg',
-  '/plan.jpg',
-  '/direct.jpg',
-  '/pick.jpg',
-  '/part-chest.jpg',
-  '/part-back.jpg',
-  '/part-arm.jpg',
-  '/part-core.jpg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/images/splash.jpg',
+  '/images/spartan.png',
+  '/images/storm.jpg',
+  '/images/clouds.jpg',
+  '/images/helmet.jpg',
+  '/images/plan.jpg',
+  '/images/direct.jpg',
+  '/images/pick.jpg',
+  '/images/part-chest.jpg',
+  '/images/part-back.jpg',
+  '/images/part-arm.jpg',
+  '/images/part-core.jpg',
+  '/images/icon-192.png',
+  '/images/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

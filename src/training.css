@@ -7,7 +7,12 @@
   --train-soft: #f5f6f8;
   --train-line: #eceef3;
   --train-faint: #8e94a0;
-  --train-red: #e8485c;
+  --train-red: #e63946;
+  --accent: #e63946;
+  --accent-deep: #b8202e;
+  --accent-fill: #d92b3a;
+  --accent-soft: #fdecee;
+  --accent-line: #f5c2c7;
 }
 
 .train-head {
@@ -77,7 +82,7 @@
 }
 
 .train-seg button:active {
-  transform: scale(0.97);
+  transform: scale(0.95);
 }
 
 /* ---------- 周历条 ---------- */
@@ -143,7 +148,7 @@
 .week-day.today .week-day-num {
   background: var(--accent-fill);
   color: #fff;
-  box-shadow: 0 4px 11px rgba(207, 58, 78, 0.32);
+  box-shadow: 0 4px 11px rgba(230, 57, 70, 0.32);
 }
 
 .week-day.selected:not(.today) {
@@ -186,10 +191,15 @@
 
 .plan-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin: 0 1px 8px;
+  margin: 0 1px 5px;
+}
+
+.plan-title-wrap {
+  flex: 1;
+  min-width: 0;
 }
 
 .train-eyebrow {
@@ -202,12 +212,57 @@
 }
 
 .plan-heading h2 {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: 23px;
   line-height: 1.2;
   letter-spacing: -0.6px;
   font-weight: 800;
   color: var(--train-ink);
+}
+
+.plan-focus-inline {
+  font-size: 14.5px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -0.1px;
+  color: #555b66;
+}
+
+.adjust-link {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 7px 11px;
+  border: 1px solid #e9ebf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #4b515c;
+  font-size: 11.5px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(22, 24, 29, 0.03);
+  transition: transform 140ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.adjust-link:active {
+  transform: scale(0.95);
+  border-color: var(--accent-line);
+  color: var(--accent-deep);
+}
+
+.plan-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 1px 11px;
 }
 
 .plan-heading-side {
@@ -310,7 +365,7 @@
 
 .slot-card.main {
   border-color: #f2cdd2;
-  box-shadow: inset 3px 0 0 var(--accent-fill), 0 8px 20px rgba(207, 58, 78, 0.045);
+  box-shadow: inset 3px 0 0 var(--accent-fill), 0 8px 20px rgba(230, 57, 70, 0.045);
 }
 
 .slot-card.compound {
@@ -338,7 +393,7 @@
     box-shadow: 0 12px 28px rgba(22, 24, 29, 0.09);
   }
   .slot-card.main:hover {
-    box-shadow: inset 3px 0 0 var(--accent-fill), 0 12px 28px rgba(207, 58, 78, 0.1);
+    box-shadow: inset 3px 0 0 var(--accent-fill), 0 12px 28px rgba(230, 57, 70, 0.1);
   }
 }
 
@@ -357,7 +412,7 @@
 .slot-top {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
 }
 
 .slot-index {
@@ -485,7 +540,7 @@
 }
 
 .slot-remove:active {
-  transform: scale(0.88);
+  transform: scale(0.95);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
@@ -498,16 +553,16 @@
 
 .drag-handle {
   flex: none;
-  width: 18px;
-  height: 29px;
-  margin: 0 0 0 1px;
+  width: 14px;
+  height: 26px;
+  margin: 2px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, 3px);
   grid-auto-rows: 3px;
   align-content: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2.5px;
   touch-action: none;
   user-select: none;
   cursor: grab;
@@ -527,39 +582,43 @@
 
 .slot-stats {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 4px 9px;
-  margin: 12px 0 9px 37px;
+  margin: 13px 0 10px 56px;
 }
 
 .slot-main-dose {
   display: inline-flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 5px;
-  font-size: 20px;
-  line-height: 1.1;
-  font-weight: 840;
-  letter-spacing: -0.5px;
-  color: #202228;
+  gap: 7px;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 860;
+  letter-spacing: -0.9px;
+  color: #16181d;
 }
 
 .slot-main-dose b {
-  font-weight: 840;
+  font-weight: 860;
 }
 
 .slot-weight {
-  font-size: 12px;
-  font-weight: 730;
-  letter-spacing: 0;
-  color: #626873;
-  background: #f3f4f7;
-  border: 1px solid #eef0f3;
-  border-radius: 7px;
-  padding: 2px 6px;
+  font-size: 18px;
+  font-weight: 820;
+  letter-spacing: -0.4px;
+  color: #17181d;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
   transform: translateY(-1px);
+}
+
+.slot-card.main .slot-weight {
+  color: var(--accent-deep);
 }
 
 .slot-substats {
@@ -578,19 +637,32 @@
 
 .set-pills {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
-  margin-left: 37px;
+  margin-left: 56px;
+  margin-right: -14px;
+  padding: 0 14px 2px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.set-pills::-webkit-scrollbar {
+  display: none;
 }
 
 .set-pill {
+  flex: none;
+  scroll-snap-align: start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border: 1px solid #eef0f3;
   background: #f5f6f8;
-  border-radius: 9px;
-  padding: 5px 7px;
+  border-radius: 999px;
+  padding: 6px 9px;
   font-size: 10.5px;
   line-height: 1.15;
   color: #737985;
@@ -628,7 +700,7 @@
 }
 
 .slot-timed {
-  margin: 11px 0 0 37px;
+  margin: 11px 0 0 56px;
 }
 
 .slot-timed .slot-main-dose {
@@ -643,16 +715,18 @@
 }
 
 .slot-note {
-  margin: 9px 0 0 37px;
-  padding-top: 8px;
-  border-top: 1px dashed #e9ebf0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: #9298a3;
+  margin: 10px 0 0 56px;
+  padding: 9px 10px;
+  border: 1px dashed #e5e7ec;
+  border-radius: 10px;
+  background: #fbfbfc;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #9aa0aa;
 }
 
 .slot-caution {
-  margin: 8px 0 0 37px;
+  margin: 8px 0 0 56px;
   font-size: 11px;
   line-height: 1.5;
   color: var(--warn);
@@ -819,7 +893,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 90% at 95% 0%, rgba(232, 72, 92, 0.24) 0%, rgba(232, 72, 92, 0) 52%);
+  background: radial-gradient(120% 90% at 95% 0%, rgba(230, 57, 70, 0.24) 0%, rgba(230, 57, 70, 0) 52%);
   pointer-events: none;
 }
 
@@ -860,7 +934,7 @@
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   padding: 11px 15px;
-  background: linear-gradient(135deg, #ef4358, #c82c43);
+  background: linear-gradient(135deg, #e63946, #c92b3a);
   color: #fff;
   font-size: 12.5px;
   font-weight: 780;
@@ -889,6 +963,7 @@
 }
 
 .empty-free:active {
+  transform: scale(0.95);
   opacity: 0.65;
 }
 
@@ -904,7 +979,7 @@
 .empty-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px solid rgba(232, 72, 92, 0.2);
+  border: 1px solid rgba(230, 57, 70, 0.2);
 }
 
 .empty-ring.r1 {
@@ -918,14 +993,14 @@
 
 .empty-ring.r3 {
   inset: 87px;
-  border-color: rgba(232, 72, 92, 0.16);
+  border-color: rgba(230, 57, 70, 0.16);
 }
 
 .empty-bar {
   position: absolute;
   top: 50%;
   left: 50%;
-  background: linear-gradient(180deg, #ef4358, rgba(239, 67, 88, 0.18));
+  background: linear-gradient(180deg, #e63946, rgba(230, 57, 70, 0.18));
   border-radius: 999px;
   transform-origin: center;
 }
@@ -970,7 +1045,7 @@
   transform: translateY(1px);
 }
 
-/* ---------- 横向动作卡 ---------- */
+/* ---------- 横向动作??---------- */
 .home-section {
   margin: 22px 0 2px;
 }
@@ -1034,12 +1109,12 @@
 }
 
 .move-tile:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 
 .move-tile.on {
   border-color: var(--accent-line);
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 16px rgba(207, 58, 78, 0.07);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 16px rgba(230, 57, 70, 0.07);
 }
 
 .move-thumb {
@@ -1154,7 +1229,7 @@
   right: -110px;
   top: -120px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(232, 72, 92, 0.52) 0%, rgba(232, 72, 92, 0) 66%);
+  background: radial-gradient(circle, rgba(230, 57, 70, 0.52) 0%, rgba(230, 57, 70, 0) 66%);
   filter: blur(7px);
 }
 
@@ -1207,7 +1282,7 @@
   padding: 11px 12px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 17px;
-  background: linear-gradient(135deg, #ef4358, #c82c43);
+  background: linear-gradient(135deg, #e63946, #c92b3a);
   color: #fff;
   text-align: left;
   cursor: pointer;
@@ -1216,7 +1291,7 @@
 }
 
 .free-start:active {
-  transform: scale(0.975);
+  transform: scale(0.95);
 }
 
 .free-plus {
@@ -1558,7 +1633,7 @@
 }
 
 .lib-more:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .lib-empty {
@@ -1568,7 +1643,7 @@
   color: #9aa0aa;
 }
 
-/* ---------- 吸底主按钮 ---------- */
+/* ---------- 吸底主按??---------- */
 .cta-dock {
   position: fixed;
   z-index: 30;
@@ -1603,15 +1678,15 @@
   padding: 0 14px 0 18px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
-  background: linear-gradient(135deg, #ef4358 0%, #c82b43 100%);
+  background: linear-gradient(135deg, #e63946 0%, #c92b3a 100%);
   color: #fff;
-  box-shadow: 0 15px 32px rgba(200, 43, 65, 0.34), 0 2px 4px rgba(22, 24, 29, 0.08);
+  box-shadow: 0 14px 32px rgba(230, 57, 70, 0.32), 0 2px 4px rgba(22, 24, 29, 0.04);
   cursor: pointer;
   transition: transform 140ms var(--ease), box-shadow 180ms var(--ease);
 }
 
 .cta-main:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .cta-main:disabled {
@@ -1633,6 +1708,13 @@
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.2px;
+}
+
+.cta-count {
+  font-size: 12.5px;
+  font-weight: 620;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .cta-main-copy small {
@@ -1683,6 +1765,14 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--accent-soft);
+}
+
+body:has(.training-home) .tabbar button[aria-current='page'] {
+  color: #e63946;
+}
+
+body:has(.training-home) .tabbar button[aria-current='page'] .ico {
+  background: #fdecee;
 }
 
 /* ---------- 响应式 ---------- */
@@ -1825,7 +1915,7 @@ body:has(.training-home)::after {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 7px;
-  margin: 5px 0 0 32px;
+  margin: 5px 0 0 50px;
 }
 
 .slot-card.warm .slot-timed .slot-main-dose {
@@ -1848,7 +1938,7 @@ body:has(.training-home)::after {
 }
 
 .slot-card.warm .slot-stats {
-  margin: 6px 0 0 32px;
+  margin: 6px 0 0 50px;
   align-items: center;
 }
 
@@ -1876,7 +1966,9 @@ body:has(.training-home)::after {
 }
 
 .slot-card.warm .slot-caution {
-  margin: 6px 0 0 32px;
+  margin: 6px 0 0 50px;
   font-size: 10px;
 }
+
+
 

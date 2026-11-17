@@ -18,10 +18,10 @@ function roleTag(ex) {
 }
 /** 有照片的那几个分区 */
 const SECTION_PHOTO = {
-    chest: '/part-chest.jpg',
-    back: '/part-back.jpg',
-    arm: '/part-arm.jpg',
-    core: '/part-core.jpg'
+    chest: '/images/part-chest.jpg',
+    back: '/images/part-back.jpg',
+    arm: '/images/part-arm.jpg',
+    core: '/images/part-core.jpg'
 };
 export default function ExerciseView({ profile, favorites, picked, logs, date, onToggleFavorite, onTogglePick, pickFor, recordPicks, onToggleRecordPick, onFinishRecordPick }) {
     const [query, setQuery] = useState('');

@@ -222,6 +222,53 @@ function AppInner() {
         return next;
     }, [state.framework, state.weekPlan, state.profile, state.setLogs, state.activityLogs, today, pickedToday, upsertSheet]);
     /**
+     * 覆盖式训练：从「今天练哪里」回来后，今天这张表和周历上今天的主题都以新选择为准。
+     * 这里故意不把周框架交给 buildSheet —— 用户明确改过的部位，不能被原来的训练日安排稀释。
+     */
+    const overrideToday = useCallback((areas, free) => {
+        const clean = [...new Set((areas ?? []).filter(Boolean))];
+        setState((s) => {
+            const input = { totalMinutes: null, wantArea: clean[0] ?? null, wantAreas: clean, free: Boolean(free), direct: false, override: true };
+            const built = buildSheet(s.profile, null, input, s.setLogs, today, {
+                picked: s.pickedDate === today ? s.picked : [],
+                acts: s.activityLogs,
+                skipped: []
+            });
+            const focus = clean.length ? clean.join(' / ') : '自由安排';
+            const next = { ...built, focus };
+            const actionIds = [...new Set(next.slots
+                    .filter((x) => x.exId && x.kind !== 'warmupGeneral' && x.kind !== 'warmupMobility' && x.kind !== 'cooldown')
+                    .map((x) => x.exId))];
+            const weekStart = mondayOf(today);
+            const baseWeek = s.weekPlan ?? buildWeekPlan(s.framework, weekStart);
+            const day = {
+                ...(baseWeek.days?.[today] ?? {}),
+                weekday: weekdayOf(today),
+                role: clean.length ? clean.join('+') : '自选',
+                focus,
+                headline: `今天按你的选择：${focus}`,
+                mainLiftId: next.slots.find((x) => x.kind === 'main')?.exId ?? actionIds[0] ?? null,
+                exerciseIds: actionIds,
+                substitutions: [],
+                warmupMin: 0,
+                mainMin: 0,
+                cardioMin: Math.round(next.slots.filter((x) => x.kind === 'cardio').reduce((n, x) => n + x.durationSec, 0) / 60),
+                cooldownMin: 0
+            };
+            return {
+                ...s,
+                sheets: [...s.sheets.filter((x) => x.date !== today), next].sort((a, b) => (a.date < b.date ? -1 : 1)),
+                weekPlan: {
+                    ...baseWeek,
+                    weekStart: baseWeek.weekStart ?? weekStart,
+                    key: baseWeek.key ?? planKey(s.framework),
+                    days: { ...baseWeek.days, [today]: day }
+                }
+            };
+        });
+        go('#/train');
+    }, [today, go]);
+    /**
      * 自由训练：表上只有你自己点过的动作，一个都没点就是一张空表。
      * 今天的表已经记过组就不重建 —— 换一张表等于换 sheetId，上午记的组就找不到家了。
      */
@@ -390,7 +437,7 @@ function AppInner() {
         ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
         : null;
     return (<div className="app">
-      {route === 'session' ? (<SessionView sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoLog={() => go('#/log')} onGoPick={openPick}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={(areas, free) => { generateToday({ totalMinutes: sheet?.input.totalMinutes ?? null, wantArea: areas[0] ?? null, wantAreas: areas, free, direct: false }, sheet?.skipped ?? []); go('#/train'); }}/>) : (<>
+      {route === 'session' ? (<SessionView sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoLog={() => go('#/log')} onGoPick={openPick}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
           <header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
