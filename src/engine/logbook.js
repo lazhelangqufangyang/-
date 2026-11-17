@@ -28,17 +28,22 @@ function setLabel(l, unit) {
     }
     return `${l.weightKg === null ? '自重' : fmtLoad(l.weightKg, unit)}×${l.reps}`;
 }
-/** 手记的那条运动归到哪个部位：选了动作就跟动作走，否则看他点过的部位，再不行才按有氧/其他 */
-function actPart(a) {
+/** 手记的那条运动涉及哪些部位 — 分组归类用这个：只扫 exIds，一个动作算一个部位，不看用户手选的 areas
+ * （areas chips 是给日历看的"我今天练了胸"的语义标注，不应该硬套到每条 activity 上） */
+function actParts(a) {
+    const parts = new Set();
     for (const id of a.exIds) {
         const ex = byId(id);
         if (ex)
-            return partOf(ex);
+            parts.add(partOf(ex));
     }
-    const area = a.areas.find((x) => AREA_OPTIONS.includes(x));
-    if (area)
-        return area;
-    return a.kind === 'cardio' || a.kind === 'walk' ? '有氧' : '其他';
+    if (parts.size)
+        return [...parts];
+    return [a.kind === 'cardio' || a.kind === 'walk' ? '有氧' : '其他'];
+}
+/** 兼容旧字段，返回主要部位 */
+function actPart(a) {
+    return actParts(a)[0];
 }
 /** 格子里写不下全称，也没必要：稳定肌和心肺每天都被大项带到，列出来反而看不出这天真正练的是什么 */
 const PART_SHORT = {
@@ -185,7 +190,7 @@ export function buildEntries(sheets, logs, acts) {
             minutes,
             cardioMin: dayActs.reduce((n, a) => n + (isAerobic(a) ? a.minutes : 0), 0),
             plannedCardioMin: Math.round(doing.filter((s) => s.kind === 'cardio').reduce((n, s) => n + s.durationSec, 0) / 60),
-            activities: dayActs.map((a) => ({ ...a, part: actPart(a) })),
+            activities: dayActs.map((a) => ({ ...a, part: actPart(a), parts: actParts(a) })),
             bestCount: lines.filter((l) => l.best).length,
             fromSheet: !!sheet
         });

@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadState, saveState } from './store.js';
 import { buildFramework } from './engine/week.js';
 import { addPlannedSet, buildSheet, cutPlannedSet, moveSlot, swapSlotExercise, toggleDropSet, wantAreasOf } from './engine/day.js';
-import { buildWeekPlan, fwForWeek, mondayOf, moveDay, planKey, setDayExercises } from './engine/weekplan.js';
+import { buildWeekPlan, fwForWeek, mondayOf, planKey } from './engine/weekplan.js';
 import { todayIso, weekdayOf } from './engine/time.js';
 import Onboarding from './ui/Onboarding.jsx';
-import Timeline from './ui/Timeline.jsx';
-import FrameworkView from './ui/FrameworkView.jsx';
+import TrainingHome from './ui/TrainingHome.jsx';
 import SessionView from './ui/SessionView.jsx';
 import SettingsView from './ui/SettingsView.jsx';
 import ExerciseView from './ui/ExerciseView.jsx';
@@ -14,7 +13,6 @@ import LogbookView from './ui/LogbookView.jsx';
 import DietView from './ui/DietView.jsx';
 import MovePick from './ui/MovePick.jsx';
 import PlanPick from './ui/PlanPick.jsx';
-import PlanBoard from './ui/PlanBoard.jsx';
 import Welcome from './ui/Welcome.jsx';
 import Splash from './ui/Splash.jsx';
 import { pickUpTokenFromHash, sessionToken } from './api/account.js';
@@ -202,32 +200,6 @@ function AppInner() {
             };
         });
     }, []);
-    /**
-     * 「改计划」把一句话落到档案后重建框架。今天的表如果已经有记录就不动它，
-     * 免得组数标记被重建后的新 slotId 冲掉；没有记录就直接重排，所见即所得。
-     * 自由训练（没有目标）不凭空造目标：只换档案，框架保持空。
-     */
-    const applyTweak = useCallback((nextProfile) => {
-        setState((s) => {
-            const goal = s.profile.goal ?? null;
-            const framework = goal
-                ? buildFramework({ ...nextProfile, goal }, goal, { id: s.framework?.id, startDate: s.framework?.startDate }, s.favorites)
-                : null;
-            const todaySheet = s.sheets.find((x) => x.date === today) ?? null;
-            const logged = todaySheet ? s.setLogs.some((l) => l.sheetId === todaySheet.id) : false;
-            const sheets = todaySheet && !logged
-                ? s.sheets.map((x) => x.date === today
-                    ? buildSheet({ ...nextProfile, goal }, fwForInput(framework, x.input), x.input, s.setLogs, x.date, {
-                        overrides: x.overrides,
-                        picked: s.pickedDate === today ? s.picked : [],
-                        acts: s.activityLogs,
-                        skipped: x.skipped
-                    })
-                    : x)
-                : s.sheets;
-            return { ...s, profile: { ...nextProfile, goal }, framework, sheets };
-        });
-    }, [today]);
     const upsertSheet = useCallback((next, logs) => {
         setState((s) => {
             const others = s.sheets.filter((x) => x.date !== next.date);
@@ -250,15 +222,24 @@ function AppInner() {
         return next;
     }, [state.framework, state.weekPlan, state.profile, state.setLogs, state.activityLogs, today, pickedToday, upsertSheet]);
     /**
-     * 直接开始使用：不生成清单，表上只有你自己点过的动作，一个都没点就是一张空表。
-     * 今天的表已经存在就一定不重建 —— 换一张表等于换 sheetId，上午记的组就找不到家了。
+     * 自由训练：表上只有你自己点过的动作，一个都没点就是一张空表。
+     * 今天的表已经记过组就不重建 —— 换一张表等于换 sheetId，上午记的组就找不到家了。
      */
     const startDirect = useCallback(() => {
-        if (!sheet) {
-            generateToday({ totalMinutes: null, wantArea: null, wantAreas: [], direct: true }, []);
-        }
+        setState((s) => {
+            const cur = s.sheets.find((x) => x.date === today) ?? null;
+            if (cur && s.setLogs.some((l) => l.sheetId === cur.id))
+                return s;
+            const next = buildSheet(s.profile, null, { totalMinutes: null, wantArea: null, wantAreas: [], direct: true }, s.setLogs, today, {
+                picked: s.pickedDate === today ? s.picked : [],
+                acts: s.activityLogs,
+                skipped: []
+            });
+            const merged = cur ? { ...next, id: cur.id } : next;
+            return { ...s, sheets: [...s.sheets.filter((x) => x.date !== today), merged].sort((a, b) => (a.date < b.date ? -1 : 1)) };
+        });
         go('#/session');
-    }, [sheet, generateToday, go]);
+    }, [today, go]);
     /** 加动作：在这一屏里挑，挑完直接回训练，不去「动作」标签页 */
     const openPick = useCallback(() => {
         if (!sheet) {
@@ -305,24 +286,6 @@ function AppInner() {
         const next = swapSlotExercise(state.profile, base ? fwForWeek(state.framework, state.weekPlan) : null, sheet, slotId, newExId, state.setLogs, pickedToday, state.activityLogs, sheet.skipped);
         upsertSheet(next);
     }, [sheet, state.framework, state.weekPlan, state.profile, state.setLogs, state.activityLogs, pickedToday, upsertSheet]);
-    /** 拖卡片换日期：只动周计划层，今天的表没记过组就跟着重排 */
-    const movePlanDay = useCallback((from, to) => {
-        setState((s) => {
-            const weekPlan = moveDay(s.weekPlan, from, to);
-            if (weekPlan === s.weekPlan)
-                return s;
-            return { ...s, weekPlan, sheets: withTodaySheet(s, weekPlan, today) };
-        });
-    }, [today]);
-    /** 点进某一天改动作：加、删、换都落在周计划层上 */
-    const editPlanDay = useCallback((date, ids) => {
-        setState((s) => {
-            const weekPlan = setDayExercises(s.weekPlan, date, ids);
-            if (weekPlan === s.weekPlan)
-                return s;
-            return { ...s, weekPlan, sheets: withTodaySheet(s, weekPlan, today) };
-        });
-    }, [today]);
     const startWorkout = useCallback(() => {
         if (!sheet)
             generateToday({ totalMinutes: null, wantArea: null, wantAreas: [] }, []);
@@ -422,21 +385,25 @@ function AppInner() {
             }}/>);
     }
     const tab = route.split('/')[0];
+    const isTrain = tab === 'train';
+    const weekNo = state.framework
+        ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
+        : null;
     return (<div className="app">
       {route === 'session' ? (<SessionView sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoLog={() => go('#/log')} onGoPick={openPick}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={(areas, free) => { generateToday({ totalMinutes: sheet?.input.totalMinutes ?? null, wantArea: areas[0] ?? null, wantAreas: areas, free, direct: false }, sheet?.skipped ?? []); go('#/train'); }}/>) : (<>
-          <header className="topbar">
+          <header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
               <div className="sub num">
                 {todayIso()} {weekdayName(weekdayOf(today))}
-                {state.framework
-                ? ` · 第 ${Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)} 周`
-                : ' · 自由训练'}
+                {!isTrain && (state.framework
+                ? ` · 第 ${weekNo} 周`
+                : ' · 自由训练')}
               </div>
             </div>
           </header>
           <main className="screen">
-            {tab === 'train' ? (<TrainView profile={state.profile} framework={state.framework} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} onGenerate={generateToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onMoveDay={movePlanDay} onEditDay={editPlanDay} onApplyProfile={applyTweak} onGoProfile={() => go('#/settings/profile')}/>) : null}
+            {tab === 'train' ? (<TrainingHome profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
             {tab === 'moves' ? (<ExerciseView profile={state.profile} favorites={state.favorites} picked={pickedToday} logs={state.setLogs} date={today} onToggleFavorite={toggleFavorite} onTogglePick={togglePick} pickFor={recPick?.date ?? null} recordPicks={recPick?.exIds ?? []} onToggleRecordPick={toggleRecPick} onFinishRecordPick={endRecPick}/>) : null}
             {tab === 'log' ? (<LogbookView sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={clearRecPick} onAdd={addActivity} onRemove={removeActivity} onRemoveDay={removeDayLogs} onGoToday={() => go('#/train')}/>) : null}
             {tab === 'diet' ? (<DietView profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
@@ -454,89 +421,4 @@ function AppInner() {
 /** 选了「今天自由练」或「直接开始使用」都不把周框架交给引擎：这一张表现排，框架本身不动 */
 function fwForInput(fw, input) {
     return input.free || input.direct ? null : fw;
-}
-/** 周计划层改完今天的表跟着重排；已经记过组的表不动，组数标记不能丢 */
-function withTodaySheet(s, weekPlan, today) {
-    const cur = s.sheets.find((x) => x.date === today);
-    if (!cur || s.setLogs.some((l) => l.sheetId === cur.id))
-        return s.sheets;
-    const next = buildSheet(s.profile, fwForWeek(s.framework, weekPlan), cur.input, s.setLogs, today, {
-        overrides: cur.overrides,
-        picked: s.pickedDate === today ? s.picked : [],
-        acts: s.activityLogs,
-        skipped: cur.skipped
-    });
-    return s.sheets.map((x) => (x.date === today ? { ...next, id: cur.id } : x));
-}
-function TrainView({ profile, framework, sheet, weekPlan, favorites, onGenerate, onSkip, onReorder, onRegenerateFramework, onStart, onStartDirect, onGoPlan, onMoveDay, onEditDay, onApplyProfile, onGoProfile }) {
-    const weekday = weekdayOf(todayIso());
-    const [weekOpen, setWeekOpen] = useState(false);
-    const [contentOpen, setContentOpen] = useState(() => localStorage.getItem('fitplan.contentOpen') !== '0');
-    useEffect(() => {
-        localStorage.setItem('fitplan.contentOpen', contentOpen ? '1' : '0');
-    }, [contentOpen]);
-    const rowsOf = (s) => s.slots.filter((x) => !s.skipped.includes(x.id)).length;
-    const setsOf = (s) => (s ? s.slots.filter((x) => !s.skipped.includes(x.id)).reduce((n, x) => n + x.setPlan.length, 0) : 0);
-    const weekNo = framework
-        ? Math.min(framework.weeksTotal, Math.floor((Date.now() - new Date(`${framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
-        : null;
-    const tag = `${weekdayName(weekday)}${weekNo ? ` · 第 ${weekNo} 周` : ''}`;
-    const planSheet = sheet && !sheet.input.direct ? sheet : null;
-    const directSheet = sheet?.input.direct ? sheet : null;
-    const directRows = directSheet ? rowsOf(directSheet) : 0;
-    const direct = {
-        title: directRows ? `自选 ${directRows} 个动作` : '选择动作进行训练',
-        meta: [directRows ? `${directRows} 行 · ${setsOf(directSheet)} 组` : '一行都还没加'],
-        cta: planSheet ? '开始记录' : directSheet ? '继续今天的运动' : '开始运动',
-        on: onStartDirect
-    };
-    return (<div>
-      <div className="block-head">本周计划</div>
-      <PlanBoard weekPlan={weekPlan} framework={framework} profile={profile} favorites={favorites} today={todayIso()} onMoveDay={onMoveDay} onEditDay={onEditDay} onStart={onStart} onGenerateFramework={onRegenerateFramework}/>
-
-      {sheet ? (<div>
-          <button className="fold-head" onClick={() => setContentOpen(!contentOpen)} aria-expanded={contentOpen}>
-            <span className="lb-title">训练内容 · {rowsOf(sheet)} 行 · {setsOf(sheet)} 组</span>
-            <span className="lb-caret">{contentOpen ? '▾' : '▸'}</span>
-          </button>
-          {contentOpen ? (<>
-              <Timeline sheet={sheet} profile={profile} onSkip={onSkip} onReorder={onReorder}/>
-              <div className="btnbar" style={{ marginTop: 12 }}>
-                <button className="btn ghost" onClick={() => onGenerate(sheet.input, sheet.skipped)}>
-                  按同样条件重排
-                </button>
-                <button className="btn ghost" onClick={onGoPlan}>
-                  改今天练哪里
-                </button>
-                <button className="btn ghost" onClick={onGoProfile}>
-                  改档案
-                </button>
-              </div>
-            </>) : (<div className="fold-lines">
-              {sheet.slots
-                    .filter((x) => !sheet.skipped.includes(x.id))
-                    .slice(0, 3)
-                    .map((x) => (<div className="fold-line" key={x.id}>
-                    <b>{x.name}</b>
-                    <span className="num">
-                      {x.setPlan.length ? `${x.setPlan.length} × ${x.setPlan[0].reps}` : `约 ${Math.round(x.durationSec / 60)} 分`}
-                    </span>
-                  </div>))}
-              {rowsOf(sheet) > 3 ? <div className="faint small">还有 {rowsOf(sheet) - 3} 行</div> : null}
-            </div>)}
-        </div>) : null}
-
-      <div className="card tight" style={{ marginTop: 12 }}>
-        <button className="lb-day" onClick={() => setWeekOpen(!weekOpen)} aria-expanded={weekOpen}>
-          <span className="lb-title">{framework ? '这周怎么练 · 周框架与训练条件' : '训练条件 · 伤病、器械、要不要有氧'}</span>
-          <span className="lb-caret">{weekOpen ? '▾' : '▸'}</span>
-        </button>
-        {!weekOpen && framework ? (<div className="faint small">
-            {`每周 ${framework.days.length} 天 · ${framework.days.map((d) => weekdayName(d.weekday)).join('、')}`}
-          </div>) : null}
-      </div>
-      {weekOpen ? (<div style={{ marginTop: 10 }}>
-          <FrameworkView framework={framework} profile={profile} onApplyProfile={onApplyProfile}/>
-        </div>) : null}
-    </div>);
 }

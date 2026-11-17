@@ -28,6 +28,17 @@ export default function LogbookView({ sheets, logs, activities, recPick, onStart
     const entries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
     const thisWeek = rangeStats(entries, addDaysIso(today, -6), today);
     const lastWeek = rangeStats(entries, addDaysIso(today, -13), addDaysIso(today, -7));
+    const weekDelta = (cur, prev) => {
+        if (!prev) return null;
+        const pct = Math.round((cur / prev - 1) * 100);
+        return { pct, up: pct >= 0 };
+    };
+    const stats = [
+        { label: '练过次数', value: thisWeek.sessions, suffix: '次', delta: weekDelta(thisWeek.sessions, lastWeek.sessions) },
+        { label: '记下组数', value: thisWeek.sets, suffix: '组', delta: weekDelta(thisWeek.sets, lastWeek.sets) },
+        { label: '自己记的活动', value: thisWeek.acts, suffix: '条', delta: weekDelta(thisWeek.acts, lastWeek.acts) },
+        { label: '负重总量', value: thisWeek.tonnage.toLocaleString('zh-CN'), suffix: 'kg', delta: weekDelta(thisWeek.tonnage, lastWeek.tonnage) }
+    ];
     // 日历默认只铺三周，更早的记录点「全部」一次摊开
     const [allOpen, setAllOpen] = useState(false);
     const weeks = allOpen ? weeksToCover(entries, today) : 3;
@@ -62,95 +73,67 @@ export default function LogbookView({ sheets, logs, activities, recPick, onStart
         const i = Math.min(Math.max(0, todayIdx), Math.max(0, selIdx + by));
         setSel(squares[i].date);
     };
+    // 月份显示
+    const selMonth = Number(sel.slice(5, 7));
+    const selYear = sel.slice(0, 4);
     // 一天一格的行宽是七的倍数，选中之后保证它落在视野里就够了，不用自己滚
     useEffect(() => {
         document.getElementById('lb-sel')?.scrollIntoView({ block: 'nearest' });
     }, [sel]);
     return (<div>
-      <div className="card summary">
-        <h3>近 7 天</h3>
-        <div className="kv">
-          <span>练过的次数</span>
-          <span className="num">
-            {thisWeek.sessions} 次
-            <span className="faint small">{` （上一周 ${lastWeek.sessions}）`}</span>
-          </span>
-        </div>
-        <div className="kv">
-          <span>记下的组数</span>
-          <span className="num">
-            {thisWeek.sets} 组
-            <span className="faint small">{` （上一周 ${lastWeek.sets}）`}</span>
-          </span>
-        </div>
-        <div className="kv">
-          <span>自己记的活动</span>
-          <span className="num">
-            {thisWeek.acts} 条
-            <span className="faint small">{` （上一周 ${lastWeek.acts}）`}</span>
-          </span>
-        </div>
-        <div className="kv">
-          <span>负重总量</span>
-          <span className="num">
-            {thisWeek.tonnage.toLocaleString('zh-CN')} kg
-            {lastWeek.tonnage ? (<span className="faint small">{` · 比上一周 ${thisWeek.tonnage >= lastWeek.tonnage ? '+' : ''}${Math.round((thisWeek.tonnage / lastWeek.tonnage - 1) * 100)}%`}</span>) : null}
-          </span>
+      <div className="card lb-cards-gap">
+        <div className="lb-stats-grid">
+          {stats.map((s) => (<div className="lb-stat" key={s.label}>
+            <div className="lb-stat-label">{s.label}</div>
+            <div className="lb-stat-value num">
+              {s.value}
+              <span className="lb-stat-suffix">{s.suffix}</span>
+            </div>
+            {s.delta ? (<div className={`lb-stat-delta${s.delta.up ? ' up' : ' down'}`}>
+                {s.delta.up ? '↑' : '↓'} {Math.abs(s.delta.pct)}%
+              </div>) : (<div className="lb-stat-delta faint small">—</div>)}
+          </div>))}
         </div>
       </div>
 
       <div className="card">
-        <h3>日历</h3>
-        <div className="lb-range">
+        <div className="lb-cal-head">
+          <button className="lb-nav-arrow" onClick={() => shift(-7)} disabled={selIdx <= 0} aria-label="早一周">‹</button>
+          <div className="lb-month-title">{selYear}年 {selMonth}月</div>
+          <button className="lb-nav-arrow" onClick={() => shift(7)} disabled={selIdx >= todayIdx} aria-label="晚一周">›</button>
+        </div>
+        <div className="lb-cal-sub">
           <span className="faint small">
-            {squares[0]?.date.slice(5).replace('-', '/')} 到 {squares.at(-1)?.date.slice(5).replace('-', '/')}
+            {squares[0]?.date.slice(5).replace('-', '/')}–{squares.at(-1)?.date.slice(5).replace('-', '/')}
           </span>
-          <button className="btn ghost lb-range-btn" onClick={toggleAll}>
-            {allOpen ? '只看三周' : '全部'}
+          <button className="lb-filter-toggle" onClick={toggleAll}>
+            {allOpen ? '只看三周' : '全部记录 ▾'}
           </button>
         </div>
         <div className="lb-week-row">
           {['一', '二', '三', '四', '五', '六', '日'].map((w) => (<span key={w}>{w}</span>))}
         </div>
         <div className="lb-grid">
-          {squares.map((s) => (<button key={s.date} id={sel === s.date ? 'lb-sel' : undefined} className={`lb-sq ${s.tone}${s.future ? ' future' : ''}${sel === s.date ? ' on' : ''}${floodDay === s.date ? ' flood' : ''}`} aria-pressed={sel === s.date} disabled={s.future} onClick={() => setSel(s.date)} title={`${s.date} ${s.dayName}`}>
+          {squares.map((s) => (<button key={s.date} id={sel === s.date ? 'lb-sel' : undefined} className={`lb-sq${s.tone === 'done' ? ' done' : ''}${s.future ? ' future' : ''}${sel === s.date ? ' on' : ''}${floodDay === s.date ? ' flood' : ''}${s.date === today ? ' today' : ''}`} aria-pressed={sel === s.date} disabled={s.future} onClick={() => setSel(s.date)} title={`${s.date} ${s.dayName}${s.parts.length ? ' · ' + s.parts.join('、') : ''}`}>
               <span className="lb-sq-d num">{s.day}</span>
-              <span className="lb-sq-t">
-                {s.parts.length
-                ? s.parts.map((p) => (<i key={p}>{p}</i>))
-                : s.cardioMin
-                    ? <i>有氧</i>
-                    : null}
-              </span>
+              {s.parts.length ? (<span className="lb-sq-tags">
+                  {s.parts.slice(0, 3).map((p) => (<i key={p} className="lb-sq-tag">{p.slice(0, 1)}</i>))}
+                  {s.parts.length > 3 ? <i className="lb-sq-tag more">+{s.parts.length - 3}</i> : null}
+                </span>) : s.cardioMin ? (<span className="lb-sq-tags"><i className="lb-sq-tag cardio">有氧</i></span>) : (<span className="lb-sq-tags">
+                  <span className="lb-sq-dot"/>
+                </span>)}
             </button>))}
         </div>
         <div className="lb-legend">
-          <span>
-            <i className="lb-dot done"/>
-            记了
-          </span>
-          <span>
-            <i className="lb-dot none"/>
-            没记
-          </span>
-          <span>
-            <i className="lb-dot future"/>
-            还没到
-          </span>
-        </div>
-        <div className="lb-nav" style={{ marginTop: 6 }}>
-          <button className="btn ghost" onClick={() => shift(-7)} disabled={selIdx <= 0}>
-            ‹ 早一周
-          </button>
-          <button className="btn ghost" onClick={() => shift(7)} disabled={selIdx >= todayIdx}>
-            晚一周 ›
-          </button>
+          <span><i className="lb-leg done"/>已记录</span>
+          <span><i className="lb-leg none"/>未记录</span>
+          <span><i className="lb-leg future"/>未来</span>
         </div>
 
         <div className="lb-done-head">
-          <b>已完成</b>
+          <b>{selMonth}月{Number(sel.slice(8))}日 {['周日','周一','周二','周三','周四','周五','周六'][new Date(sel + 'T00:00:00').getDay()]}</b>
           <span className="faint small lb-done-when">
-            {entry ? `${sel.slice(5).replace('-', '/')} ${entry.dayName} · ${entry.title}` : `${sel.slice(5).replace('-', '/')} 没记录`}
+            {entry ? `${entry.title} · ${entry.setCount}组${entry.activities.length ? ` · ${entry.activities.length}条活动` : ''}` : '这天还没练'}
           </span>
           {entry && (entry.setCount || entry.activities.length) ? (<button className={`lb-day-del${confirmDay === sel ? ' on' : ''}`} title={confirmDay === sel ? '再点一次确认删掉这天所有记录' : '删掉这天所有记录'} onClick={() => {
                     if (confirmDay !== sel) {
@@ -168,8 +151,17 @@ export default function LogbookView({ sheets, logs, activities, recPick, onStart
                 onRemove(id);
                 setConfirmId('');
             }}/>) : (<div className="lb-empty">
-            <b>这天还没记录</b>
-            <span className="faint small">在运动页练完记组，或者下面手动加一条</span>
+            <div className="lb-empty-ico" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="56" height="56" fill="none">
+                <circle cx="24" cy="38" r="3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M24 34V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M24 26l6-4M24 26l-6-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M24 34l7-7M24 34l-7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="24" cy="14" r="4" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+            </div>
+            <b>这一天还是一片空白</b>
+            <span className="faint small">动起来吧，在运动页练完记组，或者下面手动加一条</span>
           </div>)}
 
         <div className="btnbar" style={{ marginTop: 10 }}>
@@ -255,74 +247,105 @@ const partRank = (k) => {
 };
 /** 按组记的动作和手记的运动合成同一张清单：都是做完的运动，一律带对勾，不再分两栏 */
 function doneRows(entry) {
-    return [
-        ...entry.lines.map((l) => ({
-            key: `set:${l.name}`,
-            part: l.part ?? '其他',
-            left: `${l.sets} 组`,
-            sets: l.sets,
-            title: l.name,
-            meta: l.perSet.join(' / '),
-            best: l.best
-        })),
-        ...entry.activities.map((a) => ({
-            key: `act:${a.id}`,
-            part: a.part ?? '其他',
-            left: a.minutes ? `${a.minutes} 分钟` : '记录',
-            sets: 0,
-            title: a.name,
-            meta: actExtra(a)
-                .split(' · ')
-                .filter((x) => x && x !== a.part)
-                .join(' · '),
-            act: a
-        }))
-    ];
+    const setRows = entry.lines.map((l) => ({
+        key: `set:${l.name}`,
+        part: l.part ?? '其他',
+        left: `${l.sets} 组`,
+        sets: l.sets,
+        title: l.name,
+        meta: l.perSet.join(' / '),
+        best: l.best
+    }));
+    // activity 可能涉及多个部位（用户点了多个 areas、或挑了多个不同部位的动作），
+    // 拆成多行分别归入对应分组，而不是全归第一个部位
+    const actRows = [];
+    for (const a of entry.activities) {
+        const parts = a.parts?.length ? a.parts : [a.part ?? '其他'];
+        for (const p of parts) {
+            actRows.push({
+                key: `act:${a.id}:${p}`,
+                part: p,
+                left: a.minutes ? `${a.minutes} 分钟` : '记录',
+                sets: 0,
+                title: a.name,
+                meta: actExtra(a)
+                    .split(' · ')
+                    .filter((x) => x && x !== a.part && x !== p)
+                    .join(' · '),
+                act: a
+            });
+        }
+    }
+    return [...setRows, ...actRows];
 }
+/** 部位 → Emoji 图标 */
+const PART_EMOJI = {
+  胸: '💪',
+  背: '🦾',
+  肩: '🏋️',
+  手臂: '💪',
+  腿: '🦵',
+  臀: '🍑',
+  核心: '🎯',
+  有氧: '🔥',
+  其他: '✨'
+};
+/** 部位 → 柔和背景色 */
+const PART_TINT = {
+  胸: '#fdecef',
+  背: '#e8f1ff',
+  肩: '#f0ebff',
+  手臂: '#fef3e2',
+  腿: '#e6f7ed',
+  臀: '#fff0f4',
+  核心: '#fef9e2',
+  有氧: '#fdecef',
+  其他: '#f4f5f9'
+};
 function DayDone({ entry, confirmId, onAskDelete, onDelete }) {
-    const head = [
-        entry.setCount ? `${entry.setCount} 组` : '',
-        entry.completion !== null ? (entry.overLogged ? '计划组数都做完了' : `完成 ${entry.completion}%`) : '',
-        entry.cardioMin ? `有氧 ${entry.cardioMin} 分钟` : '',
-        entry.tonnage ? `${entry.tonnage.toLocaleString('zh-CN')} kg` : entry.setCount ? '没能折成 kg 的组' : '',
-        entry.bestCount ? `${entry.bestCount} 个新高` : ''
-    ].filter(Boolean);
     const rows = doneRows(entry);
     const grouped = new Map();
     for (const r of rows)
         grouped.set(r.part, [...(grouped.get(r.part) ?? []), r]);
     const groups = [...grouped.entries()].sort((a, b) => partRank(a[0]) - partRank(b[0]));
-    return (<div>
-      <div className="lb-head-line">
-        {head.length ? head.join(' · ') : entry.fromSheet ? '这天有表，但一组都没记' : '只记了运动，没在执行表上记组'}
+    const onlyActivity = !entry.setCount && entry.activities.length > 0 && entry.lines.length === 0;
+    // feel 汇总：取 activity 的 feel 中位数（0 表示没记状态）
+    const feels = entry.activities.map((a) => a.feel).filter((f) => f !== null && f !== undefined);
+    const medianFeel = feels.length ? feels.sort((a, b) => a - b)[Math.floor(feels.length / 2)] : null;
+    return (<div className="lb-detail">
+      <div className="lb-detail-meta">
+        {entry.cardioMin ? <span className="lb-tag cardio">有氧 {entry.cardioMin}分</span> : null}
+        {entry.tonnage ? <span className="lb-tag tonnage">{entry.tonnage.toLocaleString('zh-CN')} kg</span> : null}
+        {entry.bestCount ? <span className="lb-tag best">{entry.bestCount}个新高</span> : null}
+        {medianFeel !== null ? <span className={`lb-tag feel feel-${medianFeel}`}>状态 {medianFeel}/5</span> : null}
+        {onlyActivity ? <span className="lb-tag plain">仅记录</span> : null}
+        {entry.completion !== null && entry.lines.length > 0 ? <span className="lb-tag done">完成 {entry.completion}%</span> : null}
       </div>
 
       {groups.map(([part, items]) => {
             const sets = items.reduce((n, r) => n + r.sets, 0);
-            return (<div className="lb-part" key={part}>
-              <div className="lb-part-head">
+            const tint = PART_TINT[part] ?? 'var(--bg-sunken)';
+            return (<div className="lb-grp" key={part}>
+              <div className="lb-grp-head" style={{ background: tint }}>
+                <span className="lb-grp-emoji" aria-hidden="true">{PART_EMOJI[part] ?? '✨'}</span>
                 <b>{part}</b>
-                <span className="faint small">
-                  {items.length} 个动作{sets ? ` · ${sets} 组` : ''}
-                </span>
+                <span className="lb-grp-count num">{items.length}</span>
+                {sets ? <span className="lb-grp-sets num">· {sets}组</span> : null}
               </div>
-              {items.map((r) => (<div className="lb-done" key={r.key}>
-                  <span className="lb-done-sets num">{r.left}</span>
-                  <span className="lb-done-badge" aria-hidden="true">
-                    {part.slice(0, 1)}
-                  </span>
-                  <span className="lb-done-body">
-                    <b>{r.title}</b>
-                    <span className="lb-done-meta num">{r.meta}</span>
-                  </span>
-                  {r.best ? <span className="tag accent">新高</span> : null}
-                  {r.act ? (<button className={`lb-del${confirmId === r.act.id ? ' on' : ''}`} onClick={() => (confirmId === r.act.id ? onDelete(r.act.id) : onAskDelete(r.act.id))}>
-                      {confirmId === r.act.id ? '确认删' : '删'}
-                    </button>) : null}
-                  <span className="lb-done-ok" aria-hidden="true">
-                    ✓
-                  </span>
-                </div>))}
+              <div className="lb-chips">
+                {items.map((r) => {
+                    const chipConfirm = r.act && confirmId === r.act.id;
+                    return (<div key={r.key} className={`lb-chip${chipConfirm ? ' on' : ''}`}>
+                        <span className="lb-chip-name">{r.title}</span>
+                        {r.sets > 0 ? <span className="lb-chip-sub num">{r.sets}组×{r.meta?.match(/\d+/)?.[0] ?? ''}</span> : null}
+                        {!r.sets && r.left ? <span className="lb-chip-sub num">{r.left}</span> : null}
+                        {r.meta && r.meta !== r.title ? <span className="lb-chip-meta">{r.meta}</span> : null}
+                        {r.act ? (chipConfirm ? (<button className="lb-chip-confirm" onClick={() => {
+                                        onDelete(r.act.id);
+                                    }}>确认删除</button>) : (<button className="lb-chip-del" title="删除这条手记" onClick={() => onAskDelete(r.act.id)}>✕</button>)) : null}
+                      </div>);
+                })}
+              </div>
             </div>);
         })}
     </div>);
