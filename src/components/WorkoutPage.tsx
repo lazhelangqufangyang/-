@@ -416,7 +416,7 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
       `}</style>
 
       <main className="min-h-screen bg-gray-50 pb-40 text-gray-900">
-        <div className="mx-auto max-w-md px-4 pt-6">
+        <div className="screen-safe-top mx-auto max-w-md px-4">
           <header>
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#E63946]">
               <Dumbbell size={14} />WORKOUT IN PROGRESS
@@ -464,7 +464,7 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
         </div>
 
         {!loading && !loadError && exercises.length > 0 && (
-          <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-gray-100 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-8px_24px_rgba(17,24,39,0.06)] backdrop-blur">
+          <div className="sticky bottom-[60px] z-40 mx-auto mt-6 w-full max-w-md border-t border-gray-100 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-8px_24px_rgba(17,24,39,0.06)] backdrop-blur">
             {submitError && <p className="mb-2 text-center text-[11px] font-medium text-red-500">{submitError}</p>}
             <button type="button" disabled={submitting || !totalSets} onClick={completeTraining} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E63946] text-base font-black tracking-wide text-white shadow-[0_10px_24px_rgba(230,57,70,0.28)] transition-all hover:bg-[#d92b3a] disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.97]">
               {submitting && <Loader2 size={19} className="animate-spin" />}

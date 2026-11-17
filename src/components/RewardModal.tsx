@@ -113,7 +113,7 @@ export default function RewardModal({
                   className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center"
                   style={{
                     background:
-                      'radial-gradient(circle at center, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.72) 66%, rgba(0,0,0,0.9) 100%)',
+                      'radial-gradient(circle at center, #101010 0%, #050505 62%, #000000 100%)',
                   }}
                 >
                   <div className="relative mb-7">

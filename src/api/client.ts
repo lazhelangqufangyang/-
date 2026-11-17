@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 // 统一 API 请求入口。
-// base 优先级：fitplan.api（现有项目运行时配置）> VITE_API_BASE_URL > VITE_API_BASE > 占位地址。
+// base 优先级：fitplan.api（现有项目运行时配置）> VITE_API_BASE_URL > VITE_API_BASE > 同源 /api。
 const runtimeBase =
   typeof localStorage !== 'undefined' ? (localStorage.getItem('fitplan.api') ?? '').trim() : '';
 
@@ -9,7 +9,7 @@ export const API_BASE_URL = (
   runtimeBase ||
   import.meta.env?.VITE_API_BASE_URL ||
   import.meta.env?.VITE_API_BASE ||
-  'https://api.yourdomain.com'
+  '/api'
 ).replace(/\/+$/, '');
 
 export class ApiError extends Error {

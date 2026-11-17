@@ -1,0 +1,23 @@
+/*
+ * 旧 UI 样式和新组件 Tailwind 工具类共存：
+ * legacy 层先声明，Tailwind 的 utilities 层后声明，避免旧 button/h1 等元素规则压住新组件。
+ * 不引入 Tailwind preflight，保留旧项目的字号、按钮和滚动行为。
+ */
+@layer theme, base, legacy, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./styles.css" layer(legacy);
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-width: 0;
+    border-style: solid;
+  }
+}
+
+.screen-safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 24px);
+}

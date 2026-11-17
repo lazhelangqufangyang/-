@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 // SPA fallback 会把 /landing/ 目录 URL 吞成应用壳，这里先指到落地页自己的 index
 const landingIndex = {
@@ -19,7 +20,7 @@ const landingIndex = {
 };
 
 export default defineConfig({
-  plugins: [landingIndex, react()],
+  plugins: [landingIndex, tailwindcss(), react()],
   server: {
     // 前端默认打同源的 /api：开发时由这里转给本地后端
     proxy: {

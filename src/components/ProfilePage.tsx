@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Crown,
@@ -8,32 +8,51 @@ import {
   Loader2,
   Lock,
   LogIn,
+  LogOut,
   Pencil,
   RefreshCw,
+  Settings,
   Shield,
   Sunrise,
   Target,
   Trophy,
-  X,
 } from 'lucide-react';
-import { apiRequest, getErrorMessage, isUnauthorized } from '../api/client';
+import { apiRequest, isUnauthorized } from '../api/client';
+import { logOut, setSessionToken } from '../api/account.js';
+import BottomSheet from './profile/BottomSheet';
+import LogoutConfirmDialog from './profile/LogoutConfirmDialog';
+import ProfileSettingsSheet from './profile/ProfileSettingsSheet';
+import {
+  clearOverviewCache,
+  formatSyncedAt,
+  readOverviewCache,
+  readSyncPreference,
+  writeOverviewCache,
+  writeSyncPreference,
+} from './profile/profileStorage';
+import type {
+  BadgesPayload,
+  EarnedBadge,
+  SettingsModule,
+  SyncPhase,
+  UserProfile,
+} from './profileTypes';
 
-type UserProfile = {
-  id?: string;
-  name?: string;
-  goal?: string;
-  height?: number | null;
-  weight?: number | null;
-  avatar?: string;
+type ProfilePageProps = {
+  isLoggedIn?: boolean;
+  onLogin?: () => void;
+  onLogout?: () => void;
+  onSaveProfile?: (profile: UserProfile) => void;
+  onOpenModule?: (module: SettingsModule) => void;
 };
 
-type EarnedBadge = {
-  id?: string;
-  name?: string;
-  awardedAt?: string;
+const EMPTY_PROFILE: UserProfile = {
+  name: '',
+  goal: '',
+  height: null,
+  weight: null,
+  avatar: '',
 };
-
-type BadgesPayload = (EarnedBadge | string)[] | { badges: (EarnedBadge | string)[] };
 
 const BADGE_CATALOG = [
   { id: 'first', name: '初次训练', desc: '完成第一次训练', icon: Dumbbell, colors: ['#fff1f2', '#fecdd3'], ink: '#be123c' },
@@ -61,12 +80,38 @@ function normalizeBadges(payload: BadgesPayload): EarnedBadge[] {
   if (!Array.isArray(list)) throw new Error('徽章数据格式不正确');
   return list
     .map((item) => (typeof item === 'string' ? { name: item } : { id: item.id, name: item.name, awardedAt: item.awardedAt }))
-    .filter((item) => item.id || item.name);}
+    .filter((item) => item.id || item.name);
+}
+
+function settleProfile(
+  result: PromiseSettledResult<UserProfile | { profile: UserProfile }>,
+): UserProfile | null {
+  if (result.status !== 'fulfilled') return null;
+  try {
+    return normalizeProfile(result.value);
+  } catch {
+    return null;
+  }
+}
+
+function settleBadges(result: PromiseSettledResult<BadgesPayload>): EarnedBadge[] | null {
+  if (result.status !== 'fulfilled') return null;
+  try {
+    return normalizeBadges(result.value);
+  } catch {
+    return null;
+  }
+}
 
 function formatMeasure(value: number | null | undefined) {
+  if (value === null || value === undefined) return '--';
   const number = Number(value);
-  if (!Number.isFinite(number)) return '—';
+  if (!Number.isFinite(number)) return '--';
   return Number.isInteger(number) ? String(number) : number.toFixed(1);
+}
+
+function ValueSkeleton() {
+  return <span className="inline-block h-5 w-12 animate-pulse rounded bg-gray-100 align-middle" />;
 }
 
 function EditProfileSheet({
@@ -78,169 +123,243 @@ function EditProfileSheet({
   onSave,
 }: {
   open: boolean;
-  profile: UserProfile | null;
+  profile: UserProfile;
   saving: boolean;
   error: string;
   onClose: () => void;
-  onSave: (height: number, weight: number) => Promise<void>;
+  onSave: (height: number, weight: number, goal: string) => Promise<void>;
 }) {
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
+  const [goal, setGoal] = useState('');
 
   useEffect(() => {
-    if (!open || !profile) return;
+    if (!open) return;
     setHeight(profile.height === null || profile.height === undefined ? '' : String(profile.height));
     setWeight(profile.weight === null || profile.weight === undefined ? '' : String(profile.weight));
+    setGoal(profile.goal ?? '');
   }, [open, profile]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
 
   const numericHeight = Number(height);
   const numericWeight = Number(weight);
-  const canSave = Number.isFinite(numericHeight) && numericHeight > 0 && Number.isFinite(numericWeight) && numericWeight > 0;
+  const canSave =
+    Number.isFinite(numericHeight) &&
+    numericHeight > 0 &&
+    Number.isFinite(numericWeight) &&
+    numericWeight > 0;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm"
-          onClick={saving ? undefined : onClose}
-        >
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded-t-3xl bg-white px-5 pb-6 pt-3 shadow-2xl"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 24px)' }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="编辑档案"
-          >
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-gray-200" />
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-gray-900">编辑档案</h2>
-                <p className="mt-1 text-xs text-gray-400">更新身高与体重</p>
-              </div>
-              <button type="button" disabled={saving} onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 disabled:opacity-40 active:scale-95" aria-label="关闭">
-                <X size={17} />
-              </button>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <label className="rounded-2xl bg-gray-50 p-3">
-                <span className="text-[11px] font-semibold text-gray-500">身高</span>
-                <span className="mt-2 flex items-baseline gap-1">
-                  <input type="number" inputMode="decimal" value={height} onChange={(event) => setHeight(event.target.value)} className="min-w-0 flex-1 bg-transparent text-2xl font-black text-gray-900 outline-none" />
-                  <span className="text-xs font-semibold text-gray-400">cm</span>
-                </span>
-              </label>
-              <label className="rounded-2xl bg-gray-50 p-3">
-                <span className="text-[11px] font-semibold text-gray-500">体重</span>
-                <span className="mt-2 flex items-baseline gap-1">
-                  <input type="number" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} className="min-w-0 flex-1 bg-transparent text-2xl font-black text-gray-900 outline-none" />
-                  <span className="text-xs font-semibold text-gray-400">kg</span>
-                </span>
-              </label>
-            </div>
-            {error && <p className="mt-4 text-center text-[11px] font-medium text-red-500">{error}</p>}
-            <button type="button" disabled={!canSave || saving} onClick={() => void onSave(numericHeight, numericWeight)} className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E63946] text-sm font-black text-white shadow-[0_8px_20px_rgba(230,57,70,0.25)] transition-all disabled:cursor-not-allowed disabled:opacity-35 active:scale-[0.98]">
-              {saving && <Loader2 size={17} className="animate-spin" />}
-              {saving ? '保存中...' : '保存'}
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="编辑身体档案"
+      subtitle="更新身高、体重与目标"
+      closeDisabled={saving}
+    >
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <label className="rounded-2xl bg-gray-50 p-3">
+          <span className="text-[11px] font-semibold text-gray-500">身高</span>
+          <span className="mt-2 flex items-baseline gap-1">
+            <input type="number" inputMode="decimal" value={height} onChange={(event) => setHeight(event.target.value)} className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-2xl font-black text-gray-900 shadow-none outline-none focus:outline-none" />
+            <span className="text-xs font-semibold text-gray-400">cm</span>
+          </span>
+        </label>
+        <label className="rounded-2xl bg-gray-50 p-3">
+          <span className="text-[11px] font-semibold text-gray-500">体重</span>
+          <span className="mt-2 flex items-baseline gap-1">
+            <input type="number" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-2xl font-black text-gray-900 shadow-none outline-none focus:outline-none" />
+            <span className="text-xs font-semibold text-gray-400">kg</span>
+          </span>
+        </label>
+      </div>
+
+      <label className="mt-3 block rounded-2xl bg-gray-50 p-3">
+        <span className="text-[11px] font-semibold text-gray-500">目标</span>
+        <input
+          value={goal}
+          onChange={(event) => setGoal(event.target.value)}
+          placeholder="例如：增肌塑形"
+          className="mt-2 w-full rounded-none border-0 bg-transparent p-0 text-base font-bold text-gray-900 shadow-none outline-none placeholder:font-medium placeholder:text-gray-300 focus:outline-none"
+        />
+      </label>
+
+      {error && <p className="mt-4 text-center text-[11px] font-medium text-[#E63946]">{error}</p>}
+
+      <button type="button" disabled={!canSave || saving} onClick={() => void onSave(numericHeight, numericWeight, goal.trim())} className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E63946] text-sm font-black text-white shadow-[0_8px_20px_rgba(230,57,70,0.25)] transition-all disabled:cursor-not-allowed disabled:opacity-35 active:scale-[0.98]">
+        {saving && <Loader2 size={17} className="animate-spin" />}
+        {saving ? '保存中...' : '保存'}
+      </button>
+    </BottomSheet>
   );
 }
 
 export default function ProfilePage({
   isLoggedIn,
   onLogin,
+  onLogout,
   onSaveProfile,
-}: {
-  isLoggedIn?: boolean;
-  onLogin?: () => void;
-  onSaveProfile?: (profile: UserProfile) => void;
-}) {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn === false ? false : true);
-  const [loading, setLoading] = useState(isLoggedIn !== false);
-  const [loadError, setLoadError] = useState('');
+  onOpenModule,
+}: ProfilePageProps) {
+  const [initialCache] = useState(() => (isLoggedIn === false ? null : readOverviewCache()));
+  const [profile, setProfile] = useState<UserProfile>(() => initialCache?.profile ?? EMPTY_PROFILE);
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>(() => initialCache?.badges ?? []);
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn !== false);
+  const [syncEnabled, setSyncEnabled] = useState<boolean>(readSyncPreference);
+  const [phase, setPhase] = useState<SyncPhase>(() => (isLoggedIn !== false && syncEnabled ? 'syncing' : 'off'));
+  const [loading, setLoading] = useState(() => isLoggedIn !== false && syncEnabled);
+  const [syncError, setSyncError] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => initialCache?.syncedAt || null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+
+  /** 只有用户主动重试/开启同步才提示「档案已同步」，首次进页静默刷新 */
+  const manualSync = useRef(false);
+  const onLogoutRef = useRef(onLogout);
 
   useEffect(() => {
-    if (isLoggedIn === false) {
+    onLogoutRef.current = onLogout;
+  });
+
+  const showToast = useCallback((text: string) => {
+    setToast({ id: Date.now(), text });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => {
+      setToast((current) => (current?.id === toast.id ? null : current));
+    }, 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  /** 令牌失效或退出时统一收拾页面状态，避免把上一个账号的缓存继续展示 */
+  const expireSession = useCallback(
+    (message: string) => {
+      setSessionToken(null);
       setLoggedIn(false);
-      setLoading(false);
-      setProfile(null);
+      setProfile(EMPTY_PROFILE);
       setEarnedBadges([]);
-      setLoadError('');
+      setLastSyncedAt(null);
+      setSyncError(false);
+      setLoading(false);
+      setPhase('off');
+      setEditOpen(false);
+      setSaveError('');
+      clearOverviewCache();
+      manualSync.current = false;
+      showToast(message);
+      onLogoutRef.current?.();
+    },
+    [showToast],
+  );
+
+  useEffect(() => {
+    if (isLoggedIn === undefined) return;
+
+    setLoggedIn(Boolean(isLoggedIn));
+    // 没有令牌就不该继续展示上一个账号的缓存，哪怕是退出过程中短暂的一帧
+    if (isLoggedIn) return;
+
+    setProfile(EMPTY_PROFILE);
+    setEarnedBadges([]);
+    setLastSyncedAt(null);
+    setSyncError(false);
+    setLoading(false);
+    setPhase('off');
+    clearOverviewCache();
+    manualSync.current = false;
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!loggedIn) {
+      setLoading(false);
+      setSyncError(false);
+      setPhase('off');
       return undefined;
     }
 
+    if (!syncEnabled) {
+      setLoading(false);
+      setSyncError(false);
+      setPhase('off');
+      return undefined;
+    }
+
+    let cancelled = false;
     const controller = new AbortController();
     setLoading(true);
-    setLoadError('');
-    setLoggedIn(true);
+    setSyncError(false);
+    setPhase('syncing');
 
-    Promise.allSettled([
-      apiRequest<UserProfile | { profile: UserProfile }>('/users/me/profile', { signal: controller.signal }),
-      apiRequest<BadgesPayload>('/users/me/badges', { signal: controller.signal }),
-    ])
-      .then(([profileResult, badgesResult]) => {
-        if (controller.signal.aborted) return;
+    const load = async () => {
+      try {
+        const [profileResult, badgesResult] = await Promise.allSettled([
+          apiRequest<UserProfile | { profile: UserProfile }>('/users/me/profile', {
+            signal: controller.signal,
+          }),
+          apiRequest<BadgesPayload>('/users/me/badges', {
+            signal: controller.signal,
+          }),
+        ]);
+
+        if (cancelled || controller.signal.aborted) return;
 
         const unauthorized =
           (profileResult.status === 'rejected' && isUnauthorized(profileResult.reason)) ||
           (badgesResult.status === 'rejected' && isUnauthorized(badgesResult.reason));
 
         if (unauthorized) {
-          setLoggedIn(false);
-          setProfile(null);
-          setEarnedBadges([]);
-          setLoadError('');
+          expireSession('登录已过期，请重新登录');
           return;
         }
 
-        if (profileResult.status === 'fulfilled') {
-          setProfile(normalizeProfile(profileResult.value));
+        const nextProfile = settleProfile(profileResult);
+        const nextBadges = settleBadges(badgesResult);
+
+        if (nextProfile) setProfile(nextProfile);
+        if (nextBadges) setEarnedBadges(nextBadges);
+
+        // 两份都拿到了才算一次完整同步；只到一半时保留上一次的缓存
+        if (nextProfile && nextBadges) {
+          const syncedAt = new Date().toISOString();
+          setLastSyncedAt(syncedAt);
+          writeOverviewCache({ profile: nextProfile, badges: nextBadges, syncedAt });
+          setSyncError(false);
+          setPhase('ok');
+          if (manualSync.current) {
+            manualSync.current = false;
+            showToast('档案已同步');
+          }
         } else {
-          setLoadError(getErrorMessage(profileResult.reason) || '个人档案加载失败');
+          manualSync.current = false;
+          setSyncError(true);
+          setPhase('error');
         }
-
-        if (badgesResult.status === 'fulfilled') {
-          setEarnedBadges(normalizeBadges(badgesResult.value));
-        } else {
-          setLoadError((current) => current || getErrorMessage(badgesResult.reason) || '徽章数据加载失败');
+      } catch {
+        if (!cancelled && !controller.signal.aborted) {
+          manualSync.current = false;
+          setSyncError(true);
+          setPhase('error');
         }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+      } finally {
+        if (!cancelled && !controller.signal.aborted) setLoading(false);
+      }
+    };
 
-    return () => controller.abort();
-  }, [isLoggedIn, refreshKey]);
+    void load();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [loggedIn, syncEnabled, refreshKey, expireSession, showToast]);
 
-  useEffect(() => {
-    if (isLoggedIn !== undefined) setLoggedIn(Boolean(isLoggedIn));
-  }, [isLoggedIn]);
+  const showSkeleton =
+    loading && !profile.name && !profile.goal && profile.height == null && profile.weight == null;
 
   const earnedKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -256,122 +375,250 @@ export default function ProfilePage({
     [earnedKeys],
   );
 
-  const saveProfile = async (height: number, weight: number) => {
+  /** 用户主动重试：开关已关时先打开设置，而不是在背后偷偷发请求 */
+  const requestSync = useCallback(() => {
+    if (!loggedIn) {
+      setSettingsOpen(true);
+      return;
+    }
+    manualSync.current = true;
+    setRefreshKey((key) => key + 1);
+  }, [loggedIn]);
+
+  const toggleSync = useCallback(
+    (next: boolean) => {
+      writeSyncPreference(next);
+      setSyncEnabled(next);
+
+      if (!next) {
+        manualSync.current = false;
+        setLoading(false);
+        setSyncError(false);
+        setPhase('off');
+        return;
+      }
+
+      if (!loggedIn) return;
+      manualSync.current = true;
+      setPhase('syncing');
+      setRefreshKey((key) => key + 1);
+    },
+    [loggedIn],
+  );
+
+  const openSettings = () => {
+    setEditOpen(false);
+    setSaveError('');
+    setSettingsOpen(true);
+  };
+
+  const openEdit = () => {
+    setSettingsOpen(false);
+    setSaveError('');
+    setEditOpen(true);
+  };
+
+  const openModule = (module: SettingsModule) => {
+    setSettingsOpen(false);
+    onOpenModule?.(module);
+  };
+
+  const saveProfile = async (height: number, weight: number, goal: string) => {
     setSaving(true);
     setSaveError('');
     try {
       const payload = await apiRequest<UserProfile | { profile: UserProfile } | undefined>('/users/me/profile', {
         method: 'PATCH',
-        body: JSON.stringify({ height, weight }),
+        body: JSON.stringify({ height, weight, goal }),
       });
-      const updated = payload ? normalizeProfile(payload) : { ...(profile ?? {}), height, weight };
-      setProfile((current) => ({ ...current, ...updated }));
+      const updated = payload
+        ? normalizeProfile(payload)
+        : { ...profile, height, weight, goal };
+      const syncedAt = lastSyncedAt || new Date().toISOString();
+
+      setProfile(updated);
+      setLastSyncedAt(syncedAt);
       setEditOpen(false);
+      writeOverviewCache({ profile: updated, badges: earnedBadges, syncedAt });
+      showToast('档案已更新');
       onSaveProfile?.(updated);
     } catch (error) {
-      setSaveError(getErrorMessage(error) || '保存失败，请稍后重试');
+      if (isUnauthorized(error)) {
+        expireSession('登录已过期，请重新登录');
+        return;
+      }
+      setSaveError('保存失败，请检查网络后重试');
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmLogout = () => {
+    // 先发请求（requestJson 仍能读到旧令牌），本地立刻退出，不拿网络当退出的前提
+    void logOut().catch(() => {});
+    setSessionToken(null);
+    setLoggedIn(false);
+    setProfile(EMPTY_PROFILE);
+    setEarnedBadges([]);
+    setLastSyncedAt(null);
+    setSyncError(false);
+    setLoading(false);
+    setPhase('off');
+    setEditOpen(false);
+    setSettingsOpen(false);
+    setSaveError('');
+    clearOverviewCache();
+    manualSync.current = false;
+    setLogoutOpen(false);
+    showToast('已退出登录');
+    onLogoutRef.current?.();
   };
 
   const handleLogin = () => {
     onLogin?.();
   };
 
-  const initial = profile?.name?.trim()?.slice(0, 1) || '?';
+  const statusHint = (() => {
+    if (!loggedIn) return '登录后查看个人档案';
+    if (!syncEnabled) return '同步已暂停 · 档案仅保存在本机';
+    if (loading) return '正在同步训练档案…';
+    if (syncError) return '档案暂时无法同步';
+    if (lastSyncedAt) return `训练档案已同步 · ${formatSyncedAt(lastSyncedAt)}`;
+    return '训练档案已同步';
+  })();
+
+  const initial = profile.name?.trim()?.slice(0, 1) || '?';
 
   return (
     <>
       <style>{`.badge-scroll::-webkit-scrollbar{display:none}.badge-scroll{scrollbar-width:none}`}</style>
-      <main className="min-h-screen bg-gray-50 pb-24 text-gray-900">
-        <div className="mx-auto max-w-md px-4 pt-6">
-          <header className="flex items-center justify-between">
-            <div>
+      <div
+        className="min-h-screen bg-gray-50 text-gray-900"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+      >
+        <div className="screen-safe-top mx-auto max-w-md px-4">
+          <header className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#E63946]">MY PROFILE</div>
               <h1 className="mt-2 text-2xl font-black tracking-tight">个人中心</h1>
             </div>
-            <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${loggedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
-              {loggedIn ? '已登录' : '游客模式'}
-            </span>
-          </header>
 
-          {loadError && (
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-red-50 px-3 py-2">
-              <span className="text-[11px] font-medium text-red-500">{loadError}</span>
-              <button type="button" onClick={() => setRefreshKey((key) => key + 1)} className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#E63946]">
-                <RefreshCw size={12} />重试
+            <div className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${loading ? 'bg-gray-100 text-gray-400' : loggedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                {loading ? '同步中' : loggedIn ? '已登录' : '游客模式'}
+              </span>
+              <button
+                type="button"
+                onClick={openSettings}
+                aria-label="打开设置"
+                aria-haspopup="dialog"
+                aria-expanded={settingsOpen}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition-all hover:text-gray-900 active:scale-95"
+              >
+                <Settings size={17} strokeWidth={1.9} />
               </button>
             </div>
-          )}
+          </header>
 
-          <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            {loading ? (
-              <div className="animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-gray-100" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-28 rounded bg-gray-100" />
-                    <div className="h-3 w-20 rounded bg-gray-100" />
+          {/* 用户身份卡：即使接口失败也保留结构 */}
+          <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-4">
+              {showSkeleton ? (
+                <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-gray-100" />
+              ) : profile.avatar ? (
+                <img src={profile.avatar} alt={profile.name ?? '用户头像'} className="h-14 w-14 shrink-0 rounded-full object-cover ring-4 ring-[#E63946]/10" />
+              ) : (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-rose-300 text-xl font-black text-white ring-4 ring-[#E63946]/10">
+                  {initial}
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1">
+                {showSkeleton ? (
+                  <div className="space-y-2">
+                    <div className="h-4 w-28 animate-pulse rounded bg-gray-100" />
+                    <div className="h-3 w-20 animate-pulse rounded bg-gray-100" />
                   </div>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="h-20 rounded-xl bg-gray-100" />
-                  <div className="h-20 rounded-xl bg-gray-100" />
-                </div>
+                ) : (
+                  <>
+                    <h2 className="truncate text-lg font-black tracking-tight">
+                      {profile.name || '训练者'}
+                    </h2>
+                    <p className="mt-1 truncate text-xs text-gray-400">{statusHint}</p>
+                  </>
+                )}
               </div>
-            ) : profile ? (
-              <>
-                <div className="flex items-center gap-4">
-                  {profile.avatar ? (
-                    <img src={profile.avatar} alt={profile.name ?? '用户头像'} className="h-16 w-16 shrink-0 rounded-full object-cover ring-4 ring-[#E63946]/10" />
-                  ) : (
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-rose-300 text-2xl font-black text-white ring-4 ring-[#E63946]/10">{initial}</div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-xl font-black tracking-tight">{profile.name || '—'}</h2>
-                    <p className="mt-1 truncate text-xs font-medium text-gray-400">{profile.goal || '—'}</p>
-                  </div>
-                  <button type="button" onClick={() => { setSaveError(''); setEditOpen(true); }} className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-600 transition-all hover:border-[#E63946]/30 hover:text-[#E63946] active:scale-95">
-                    <Pencil size={12} />编辑
-                  </button>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-gray-50 p-3">
-                    <div className="text-[10px] font-semibold text-gray-400">身高</div>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <b className="text-xl font-black">{formatMeasure(profile.height)}</b>
-                      <span className="text-[10px] font-semibold text-gray-400">cm</span>
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-gray-50 p-3">
-                    <div className="text-[10px] font-semibold text-gray-400">体重</div>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <b className="text-xl font-black">{formatMeasure(profile.weight)}</b>
-                      <span className="text-[10px] font-semibold text-gray-400">kg</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : !loggedIn ? (
-              <div className="py-6 text-center">
-                <p className="text-sm font-bold text-gray-700">登录后查看个人档案</p>
-                <p className="mt-1 text-xs text-gray-400">身高、体重与训练目标会同步到你的账号</p>
-                <button type="button" onClick={handleLogin} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#E63946] px-5 py-2.5 text-[11px] font-bold text-white">
-                  <LogIn size={13} />去登录
+
+              {!loggedIn && !showSkeleton && (
+                <button type="button" onClick={handleLogin} className="flex shrink-0 items-center gap-1 rounded-full bg-[#E63946] px-3 py-2 text-[11px] font-bold text-white active:scale-95">
+                  <LogIn size={12} />登录
                 </button>
+              )}
+            </div>
+          </section>
+
+          {/* 我的身体档案：始终渲染，失败时显示占位 */}
+          <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black tracking-tight">我的身体档案</h2>
+                <p className="mt-1 text-[10px] text-gray-400">用于计算训练强度与计划</p>
               </div>
-            ) : (
-              <div className="py-6 text-center">
-                <p className="text-sm font-bold text-gray-700">档案暂时无法加载</p>
-                <p className="mt-1 text-xs text-gray-400">请检查网络后重试</p>
-                <button type="button" onClick={() => setRefreshKey((key) => key + 1)} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#E63946] px-5 py-2.5 text-[11px] font-bold text-white">
-                  <RefreshCw size={13} />重新加载
-                </button>
+              <button
+                type="button"
+                onClick={openEdit}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-all hover:border-[#E63946]/30 hover:text-[#E63946] active:scale-95"
+                aria-label="编辑身体档案"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 divide-x divide-gray-100">
+              <div className="min-w-0 pr-2">
+                <div className="text-[10px] font-semibold text-gray-400">身高</div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <b className="text-xl font-black">{showSkeleton ? <ValueSkeleton /> : formatMeasure(profile.height)}</b>
+                  <span className="text-[10px] font-semibold text-gray-400">cm</span>
+                </div>
               </div>
+              <div className="min-w-0 px-3">
+                <div className="text-[10px] font-semibold text-gray-400">体重</div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <b className="text-xl font-black">{showSkeleton ? <ValueSkeleton /> : formatMeasure(profile.weight)}</b>
+                  <span className="text-[10px] font-semibold text-gray-400">kg</span>
+                </div>
+              </div>
+              <div className="min-w-0 pl-3">
+                <div className="text-[10px] font-semibold text-gray-400">目标</div>
+                <div className="mt-1 truncate text-base font-black">
+                  {showSkeleton ? <ValueSkeleton /> : profile.goal || '--'}
+                </div>
+              </div>
+            </div>
+
+            {syncError && !loading && loggedIn && syncEnabled && (
+              <button
+                type="button"
+                onClick={requestSync}
+                className="mt-3 flex items-center gap-1 bg-transparent p-0 text-[10px] font-medium text-gray-400 hover:text-gray-600"
+              >
+                <RefreshCw size={11} />档案暂时无法同步，点击重试
+              </button>
+            )}
+
+            {!syncEnabled && loggedIn && !loading && (
+              <button
+                type="button"
+                onClick={openSettings}
+                className="mt-3 flex items-center gap-1 bg-transparent p-0 text-[10px] font-medium text-gray-400 hover:text-gray-600"
+              >
+                <RefreshCw size={11} />同步已暂停，去设置里开启
+              </button>
             )}
           </section>
 
+          {/* 荣誉墙 */}
           <section className="mt-6">
             <div className="flex items-end justify-between">
               <div>
@@ -380,6 +627,7 @@ export default function ProfilePage({
               </div>
               <Trophy size={18} className="mb-1 text-gray-300" />
             </div>
+
             <div className="relative mt-3 min-h-[142px] overflow-hidden rounded-2xl">
               <div className={`badge-scroll flex gap-3 overflow-x-auto pb-1 ${!loggedIn || loading ? 'pointer-events-none select-none opacity-55 blur-[3px]' : ''}`}>
                 {BADGE_CATALOG.map((badge) => {
@@ -404,9 +652,11 @@ export default function ProfilePage({
               )}
 
               {!loading && !loggedIn && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-white/55 px-6 text-center backdrop-blur-md">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white"><Lock size={16} /></div>
-                  <p className="mt-2 text-xs font-bold text-gray-800">登录后保存荣誉</p>
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-white/60 px-6 text-center backdrop-blur-sm">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white">
+                    <Lock size={16} />
+                  </div>
+                  <p className="mt-2 text-xs font-bold text-gray-800">登录后保存你的荣誉</p>
                   <button type="button" onClick={handleLogin} className="mt-3 flex items-center gap-1.5 rounded-full bg-[#E63946] px-5 py-2.5 text-[11px] font-bold text-white shadow-[0_6px_16px_rgba(230,57,70,0.25)] active:scale-95">
                     <LogIn size={13} />去登录
                   </button>
@@ -414,8 +664,37 @@ export default function ProfilePage({
               )}
             </div>
           </section>
+
+          {/* 退出登录：荣誉墙下方、底部导航上方，克制的淡红底 */}
+          {loggedIn && (
+            <section className="mt-5" aria-label="退出登录">
+              <button
+                type="button"
+                onClick={() => setLogoutOpen(true)}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 text-sm font-bold text-red-500 transition-all hover:bg-red-100/70 active:scale-[0.99]"
+              >
+                <LogOut size={16} strokeWidth={2} />
+                退出登录
+              </button>
+              <p className="mt-2.5 text-center text-[10px] text-gray-400">
+                本机训练记录会保留，下次登录可继续同步
+              </p>
+            </section>
+          )}
         </div>
-      </main>
+      </div>
+
+      <ProfileSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        loggedIn={loggedIn}
+        syncEnabled={syncEnabled}
+        syncPhase={phase}
+        lastSyncedAt={lastSyncedAt}
+        onToggleSync={toggleSync}
+        onRetrySync={requestSync}
+        onOpenModule={onOpenModule ? openModule : undefined}
+      />
 
       <EditProfileSheet
         open={editOpen}
@@ -430,6 +709,34 @@ export default function ProfilePage({
         }}
         onSave={saveProfile}
       />
+
+      <LogoutConfirmDialog
+        open={logoutOpen}
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={confirmLogout}
+      />
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.18 }}
+            className="pointer-events-none fixed inset-x-0 z-[95] flex justify-center px-6"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 74px)' }}
+          >
+            <div
+              role="status"
+              aria-live="polite"
+              className="rounded-full bg-gray-900/95 px-4 py-2.5 text-xs font-medium text-white shadow-lg"
+            >
+              {toast.text}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

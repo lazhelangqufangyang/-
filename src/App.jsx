@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { User } from 'lucide-react';
 import { loadState, saveState } from './store.js';
 import { buildFramework } from './engine/week.js';
 import { addPlannedSet, buildSheet, cutPlannedSet, moveSlot, swapSlotExercise, toggleDropSet, wantAreasOf } from './engine/day.js';
@@ -6,15 +7,17 @@ import { buildWeekPlan, fwForWeek, mondayOf, planKey } from './engine/weekplan.j
 import { todayIso, weekdayOf } from './engine/time.js';
 import Onboarding from './ui/Onboarding.jsx';
 import TrainingHome from './ui/TrainingHome.jsx';
-import SessionView from './ui/SessionView.jsx';
 import SettingsView from './ui/SettingsView.jsx';
-import ExerciseView from './ui/ExerciseView.jsx';
-import LogbookView from './ui/LogbookView.jsx';
 import DietView from './ui/DietView.jsx';
 import MovePick from './ui/MovePick.jsx';
 import PlanPick from './ui/PlanPick.jsx';
 import Welcome from './ui/Welcome.jsx';
 import Splash from './ui/Splash.jsx';
+import WorkoutPage from './components/WorkoutPage';
+import RewardModal from './components/RewardModal';
+import RecordPage from './components/RecordPage';
+import ProfilePage from './components/ProfilePage';
+import ExercisePickerPage from './components/ExercisePickerPage';
 import { pickUpTokenFromHash, sessionToken } from './api/account.js';
 import { weekdayName } from './engine/goals.js';
 const NAV_TABS = [
@@ -22,7 +25,7 @@ const NAV_TABS = [
     { href: '#/moves', label: '动作', ico: 'zeus' },
     { href: '#/log', label: '记录', ico: 'log' },
     { href: '#/diet', label: '饮食', ico: 'rice' },
-    { href: '#/settings', label: '设置', ico: 'gear' }
+    { href: '#/settings', label: '个人', ico: 'user' }
 ];
 /**
  * 底部五个板块各占一条历史：手机的返回键按一下就是回到上一个板块。
@@ -36,6 +39,9 @@ function tabOfRoute(r) {
 }
 /** 底部导航的图形标：stroke 走 currentColor，选中态跟着变红 */
 function TabIco({ name }) {
+    if (name === 'user') {
+        return <User className="ico" strokeWidth={1.7} aria-hidden="true"/>;
+    }
     const paths = {
         dumbbell: (<>
         <path d="M3.5 9.5v5M6.5 7.5v9M17.5 7.5v9M20.5 9.5v5"/>
@@ -56,10 +62,6 @@ function TabIco({ name }) {
         <path d="M3 12.5h18a9 8 0 0 1-18 0z"/>
         <path d="M5.5 12.5a6.5 4 0 0 1 13 0"/>
         <path d="M8.5 8.5c-.6-1.4-.2-2.4.6-3.2M12.5 8c-.7-1.6-.2-2.8.7-3.7M16 8.7c-.5-1.2-.2-2.1.5-2.8"/>
-      </>),
-        gear: (<>
-        <circle cx="12" cy="12" r="3.2"/>
-        <path d="M12 3v2.4M12 18.6V21M4.2 7.5l2 1.2M17.8 15.3l2 1.2M4.2 16.5l2-1.2M17.8 8.7l2-1.2"/>
       </>)
     };
     return (<svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
@@ -75,7 +77,7 @@ const TITLES = {
     moves: '动作选择',
     log: '运动记录',
     diet: '饮食记录',
-    settings: '设置',
+    settings: '个人',
     'settings/account': '账号',
     'settings/data': '数据与备份',
     'settings/safety': '安全边界'
@@ -111,9 +113,15 @@ function AppInner() {
     /** 登录过就不再把开头的欢迎页顶出来：换了设备登同一个账号也是直接进运动页 */
     const entered = state.onboardingDone || Boolean(sessionToken());
     const [route, setRoute] = useState(() => normalize(window.location.hash, entered));
+    /** 登录/退出都会改 localStorage 里的令牌：路由变化或本地主动通知时重算一次 */
+    const [authVersion, setAuthVersion] = useState(0);
+    const loggedIn = useMemo(() => Boolean(sessionToken()), [route, authVersion]);
     const tabRef = useRef(tabOfRoute(route));
     /** 记一条运动时，动作要去「动作」页挑；这里存着还没提交的那一条 */
     const [recPick, setRecPick] = useState(null);
+    /** 训练完成后由新 WorkoutPage 触发，奖励弹窗挂在 App 根节点 */
+    const [rewardOpen, setRewardOpen] = useState(false);
+    const [rewardBadge, setRewardBadge] = useState(null);
     useEffect(() => {
         const onHash = () => {
             const next = normalize(window.location.hash, state.onboardingDone || Boolean(sessionToken()));
@@ -394,6 +402,11 @@ function AppInner() {
     /** 挑完回记录页；清空是提交那条记录之后做的 */
     const endRecPick = useCallback(() => go('#/log'), [go]);
     const clearRecPick = useCallback(() => setRecPick(null), []);
+    /** 训练保存成功后打开奖励弹窗；徽章信息由后端保存接口返回 */
+    const handleCompleteTraining = useCallback((record) => {
+        setRewardBadge(record?.badge ?? null);
+        setRewardOpen(true);
+    }, []);
     const removeActivity = useCallback((id) => {
         setState((s) => ({ ...s, activityLogs: s.activityLogs.filter((x) => x.id !== id) }));
     }, []);
@@ -433,12 +446,13 @@ function AppInner() {
     }
     const tab = route.split('/')[0];
     const isTrain = tab === 'train';
+    const isBarePage = route === 'log' || route === 'settings' || route === 'moves';
     const weekNo = state.framework
         ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
         : null;
     return (<div className="app">
-      {route === 'session' ? (<SessionView sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoLog={() => go('#/log')} onGoPick={openPick}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
-          <header className={`topbar${isTrain ? ' train-head' : ''}`}>
+      {route === 'session' ? (<WorkoutPage onCompleteTraining={handleCompleteTraining}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
+          {!isBarePage && (<header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
               <div className="sub num">
@@ -448,13 +462,15 @@ function AppInner() {
                 : ' · 自由训练')}
               </div>
             </div>
-          </header>
-          <main className="screen">
+          </header>)}
+          <main className="screen" style={isBarePage ? { padding: 0, maxWidth: 'none' } : undefined}>
             {tab === 'train' ? (<TrainingHome profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
-            {tab === 'moves' ? (<ExerciseView profile={state.profile} favorites={state.favorites} picked={pickedToday} logs={state.setLogs} date={today} onToggleFavorite={toggleFavorite} onTogglePick={togglePick} pickFor={recPick?.date ?? null} recordPicks={recPick?.exIds ?? []} onToggleRecordPick={toggleRecPick} onFinishRecordPick={endRecPick}/>) : null}
-            {tab === 'log' ? (<LogbookView sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={clearRecPick} onAdd={addActivity} onRemove={removeActivity} onRemoveDay={removeDayLogs} onGoToday={() => go('#/train')}/>) : null}
+            {tab === 'moves' ? (<ExercisePickerPage/>) : null}
+            {tab === 'log' ? (<RecordPage/>) : null}
             {tab === 'diet' ? (<DietView profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
-            {tab === 'settings' ? (<SettingsView state={state} sub={route === 'settings' ? '' : route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>) : null}
+            {tab === 'settings' ? (route === 'settings'
+                ? <ProfilePage isLoggedIn={loggedIn} onLogin={() => go('#/settings/account')} onLogout={() => setAuthVersion((version) => version + 1)} onOpenModule={(module) => go(`#/settings/${module}`)}/>
+                : (<SettingsView state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">
             {NAV_TABS.map((t) => (<button key={t.href} aria-current={tab === t.href.replace('#/', '') ? 'page' : undefined} onClick={() => go(t.href)}>
@@ -463,6 +479,7 @@ function AppInner() {
               </button>))}
           </nav>
         </>)}
+      <RewardModal open={rewardOpen} onClose={() => { setRewardOpen(false); setRewardBadge(null); }} badgeId={rewardBadge?.id} badgeName={rewardBadge?.name}/>
     </div>);
 }
 /** 选了「今天自由练」或「直接开始使用」都不把周框架交给引擎：这一张表现排，框架本身不动 */

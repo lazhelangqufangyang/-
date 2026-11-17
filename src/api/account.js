@@ -112,7 +112,8 @@ export async function loginBadge() {
     }
 }
 export function logOut() {
-    return requestJson('/session', { method: 'DELETE' });
+    // 无论服务端那一条会话删没删掉，本机令牌都必须清：否则「退出」之后刷新还是已登录
+    return requestJson('/session', { method: 'DELETE' }).finally(() => setSessionToken(null));
 }
 export function closeAccount() {
     return requestJson('/account', { method: 'DELETE' });

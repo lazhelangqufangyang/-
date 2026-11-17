@@ -396,8 +396,8 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
 
   return (
     <>
-      <main className="min-h-screen bg-gray-50 pb-8 text-gray-900">
-        <div className="mx-auto max-w-md px-4 pt-6">
+      <main className="min-h-screen bg-gray-50 pb-28 text-gray-900">
+        <div className="screen-safe-top mx-auto max-w-md px-4">
           <header className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#E63946]">
@@ -441,7 +441,7 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
             </div>
             <div className={`mt-1 grid grid-cols-7 gap-1 ${loading ? 'opacity-50' : ''}`}>
               {calendar.map((day, index) => {
-                if (!day) return <div key={`blank-${index}`} className="h-14" />;
+                if (!day) return <div key={`blank-${index}`} className="h-14 bg-white" />;
                 const date = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
                 const record = records[date];
                 const selected = selectedDate === date;
@@ -458,7 +458,7 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
                     className={`relative flex h-14 flex-col items-center justify-center rounded-xl py-1.5 transition-all active:scale-95 ${
                       selected
                         ? 'bg-[#E63946] text-white shadow-[0_7px_16px_rgba(230,57,70,0.28)]'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
                     } ${isToday && !selected ? 'ring-1 ring-[#E63946]/40' : ''}`}
                   >
                     <span className={`text-xs font-bold ${selected ? 'text-white' : isToday ? 'text-[#E63946]' : ''}`}>{day}</span>
