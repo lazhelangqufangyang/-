@@ -1,0 +1,898 @@
+/* ============================================================
+   训练进行中
+   ============================================================ */
+
+.sess-page {
+  --sess-red: #e63946;
+  --sess-red-deep: #b8202e;
+  --sess-ink: #17181d;
+  --sess-muted: #6b7280;
+  --sess-line: #eceef2;
+  --sess-soft: #f4f5f8;
+  min-height: 100dvh;
+  background: #f7f8fa;
+  color: var(--sess-ink);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+}
+
+body:has(.sess-page)::before {
+  background-image: linear-gradient(180deg, #f7f8fa 0%, #fbfbfc 48%, #ffffff 100%);
+  background-position: 0 0;
+  background-size: auto;
+}
+
+body:has(.sess-page)::after {
+  display: none;
+}
+
+.sess-head {
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 18px 12px;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.sess-head-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sess-exit {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--sess-line);
+  border-radius: 999px;
+  background: #fff;
+  color: #4b5563;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
+  transition: transform 140ms ease;
+}
+
+.sess-exit:active {
+  transform: scale(0.95);
+}
+
+.sess-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a0a5af;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.sess-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sess-red);
+  box-shadow: 0 0 0 3px #fdecee;
+}
+
+.sess-head h1 {
+  margin: 16px 0 4px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+  font-weight: 840;
+  color: var(--sess-ink);
+}
+
+.sess-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #8d939e;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.sess-head-meta b {
+  color: var(--sess-red-deep);
+  font-weight: 760;
+}
+
+.sess-body {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 5px 16px 20px;
+}
+
+/* ---------- 动作卡片 ---------- */
+.sess-card {
+  margin-bottom: 12px;
+  padding: 15px;
+  border: 1px solid var(--sess-line);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025), 0 7px 18px rgba(17, 24, 39, 0.035);
+}
+
+.sess-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.sess-card-index {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  margin-top: 2px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fdecee;
+  border: 1px solid #f5c2c7;
+  color: var(--sess-red-deep);
+  font-size: 11.5px;
+  font-weight: 780;
+}
+
+.sess-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.sess-card-title h2 {
+  margin: 0;
+  font-size: 17.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: -0.35px;
+  color: var(--sess-ink);
+}
+
+.sess-card-title p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #8f95a0;
+}
+
+.sess-remove {
+  appearance: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--sess-line);
+  border-radius: 50%;
+  background: #fff;
+  color: #a1a6b0;
+  font-size: 17px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 140ms ease, background 150ms ease, color 150ms ease;
+}
+
+.sess-remove:active {
+  transform: scale(0.95);
+  background: #fdecee;
+  color: var(--sess-red-deep);
+}
+
+.sess-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 13px;
+}
+
+.sess-set {
+  border: 1px solid #f0f1f4;
+  border-radius: 12px;
+  background: #fafbfc;
+  overflow: hidden;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.sess-set.done {
+  border-color: #dcefe3;
+  background: #f4fbf7;
+}
+
+.sess-set.open {
+  border-color: #f3d2d6;
+  background: #fff;
+}
+
+.sess-set-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 47px;
+  padding: 6px 9px;
+}
+
+.sess-set-check {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border: 1px solid #dfe2e8;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #fff;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.sess-set-check.on {
+  background: #2f8f5b;
+  border-color: #2f8f5b;
+}
+
+.sess-set-idx {
+  flex: none;
+  font-size: 10.5px;
+  color: #969ca7;
+  white-space: nowrap;
+}
+
+.sess-set-data {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+  color: #2c2f37;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.sess-set-data b {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.sess-set-data .sess-x {
+  color: #b3b7c0;
+  font-size: 11px;
+}
+
+.sess-set-data em {
+  margin-left: 3px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f0f1f5;
+  color: #737985;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.sess-set-action {
+  appearance: none;
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 7px 1px 7px 5px;
+  color: var(--sess-red-deep);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.sess-set-action:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+
+.sess-set-action span {
+  color: #9ca2ac;
+  font-size: 13px;
+}
+
+/* ---------- 展开的记组面板 ---------- */
+.sess-log-panel {
+  padding: 2px 10px 11px;
+  border-top: 1px solid #f2d9dc;
+}
+
+.sess-logrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sess-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sess-field label {
+  font-size: 10px;
+  color: #8e949f;
+}
+
+.sess-field input {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #eceef2;
+  border-radius: 10px;
+  outline: none;
+  background: #fafbfc;
+  color: #272a31;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sess-field input:focus {
+  border-color: #f1c7cc;
+  background: #fff;
+  box-shadow: 0 0 0 3px #fdeef0;
+}
+
+.sess-log-panel .es {
+  margin-top: 9px;
+  margin-bottom: 9px;
+}
+
+.sess-warning {
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #fbf1e3;
+  color: #9b6219;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.sess-log-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sess-log-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sess-ghost {
+  appearance: none;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #e7e9ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #737985;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 140ms ease;
+}
+
+.sess-ghost:active {
+  transform: scale(0.95);
+}
+
+.sess-ghost.wide {
+  width: 100%;
+  margin-top: 7px;
+}
+
+.sess-save {
+  appearance: none;
+  min-height: 38px;
+  padding: 0 17px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--sess-red);
+  color: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 5px 13px rgba(230, 57, 70, 0.22);
+  transition: transform 140ms ease;
+}
+
+.sess-save:active {
+  transform: scale(0.95);
+}
+
+.sess-save.small {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+.sess-cut {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 7px 1px;
+  color: #a3a8b1;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.sess-cut.on {
+  color: var(--sess-red-deep);
+  font-weight: 750;
+}
+
+.sess-cut:active {
+  transform: scale(0.95);
+}
+
+/* ---------- 递减组表单 ---------- */
+.sess-dropbox {
+  margin-top: 10px;
+}
+
+.sess-drop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 10.5px;
+  color: #8e949f;
+}
+
+.sess-chip {
+  appearance: none;
+  border: 1px solid #e7e9ee;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px 8px;
+  color: #737985;
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.sess-chip[aria-pressed='true'] {
+  border-color: #f5c2c7;
+  background: #fdecee;
+  color: var(--sess-red-deep);
+  font-weight: 700;
+}
+
+.sess-drop-row {
+  display: grid;
+  grid-template-columns: 58px 1fr 1fr;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: #6f7581;
+}
+
+.sess-drop-row input {
+  width: 100%;
+  height: 35px;
+  padding: 0 8px;
+  border: 1px solid #eceef2;
+  border-radius: 8px;
+  background: #fafbfc;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.sess-drop-labels {
+  color: #a0a5af;
+  font-size: 9.5px;
+}
+
+/* ---------- 卡片底部 ---------- */
+.sess-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.sess-add-set {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #f3cdd1;
+  border-radius: 9px;
+  background: #fff8f9;
+  color: var(--sess-red-deep);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 140ms ease, background 150ms ease;
+}
+
+.sess-add-set span {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sess-add-set:active {
+  transform: scale(0.95);
+  background: #fdeef0;
+}
+
+.sess-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sess-tool {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 5px 0;
+  color: #9399a3;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.sess-tool.on {
+  color: var(--sess-red-deep);
+  font-weight: 700;
+}
+
+.sess-tool.danger {
+  color: #b35651;
+}
+
+.sess-tool:active {
+  transform: scale(0.95);
+}
+
+/* ---------- 非计数组 ---------- */
+.sess-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sess-block p {
+  margin: 0;
+  color: #8f95a0;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.sess-block-done {
+  appearance: none;
+  flex: none;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e7e9ee;
+  border-radius: 9px;
+  background: #fff;
+  color: #737985;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sess-block-done.on {
+  border-color: #cce8d8;
+  background: #f1faf5;
+  color: #2f8f5b;
+}
+
+.sess-block-done:active {
+  transform: scale(0.95);
+}
+
+/* ---------- 换动作 ---------- */
+.sess-swap {
+  margin-top: 11px;
+  padding: 11px;
+  border: 1px solid #eceef2;
+  border-radius: 13px;
+  background: #fbfbfc;
+}
+
+.sess-swap h3 {
+  margin: 0 0 7px;
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.sess-empty-line {
+  margin: 7px 0;
+  color: #9399a3;
+  font-size: 11px;
+}
+
+.sess-candidate {
+  padding: 9px 0;
+  border-top: 1px solid #eceef2;
+}
+
+.sess-candidate-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sess-candidate-head b {
+  flex: 1;
+  font-size: 12.5px;
+}
+
+.sess-candidate p {
+  margin: 3px 0 0;
+  color: #9399a3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.sess-candidate em {
+  display: block;
+  margin-top: 3px;
+  color: #2f8f5b;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.sess-add-move {
+  appearance: none;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 2px;
+  border: 1px dashed #dfe3ea;
+  border-radius: 13px;
+  background: #fff;
+  color: #7c828d;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.sess-add-move:active {
+  transform: scale(0.98);
+}
+
+/* ---------- 吸底进度 / 完成 ---------- */
+.sess-bottom-space {
+  height: 92px;
+}
+
+.sess-dock {
+  position: fixed;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 11px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  background: linear-gradient(180deg, rgba(247, 248, 250, 0) 0%, rgba(247, 248, 250, 0.96) 35%, #f7f8fa 100%);
+  pointer-events: none;
+}
+
+.sess-live-dock {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 748px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 12px;
+  border: 1px solid var(--sess-line);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.sess-live-progress {
+  flex: 1;
+  min-width: 0;
+}
+
+.sess-live-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8f95a0;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sess-live-line b {
+  color: #30333a;
+  font-weight: 750;
+}
+
+.sess-bar {
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #eff1f4;
+  overflow: hidden;
+}
+
+.sess-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e94a56, var(--sess-red));
+  transition: width 300ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.sess-continue {
+  appearance: none;
+  flex: none;
+  min-width: 105px;
+  height: 42px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--sess-red);
+  color: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 7px 16px rgba(230, 57, 70, 0.22);
+  transition: transform 140ms ease;
+}
+
+.sess-continue span {
+  margin-left: 3px;
+  font-size: 14px;
+}
+
+.sess-continue:active {
+  transform: scale(0.95);
+}
+
+.sess-finish {
+  pointer-events: auto;
+  appearance: none;
+  width: 100%;
+  max-width: 748px;
+  height: 59px;
+  margin: 0 auto;
+  padding: 0 16px 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #e94a56 0%, var(--sess-red) 36%, #c92b3a 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.15px;
+  box-shadow: 0 14px 30px rgba(230, 57, 70, 0.34);
+  cursor: pointer;
+  transition: transform 140ms ease;
+}
+
+.sess-finish:active {
+  transform: scale(0.95);
+}
+
+.sess-finish-arrow {
+  width: 33px;
+  height: 33px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* ---------- 空页 ---------- */
+.sess-empty {
+  min-height: 70dvh;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 40px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.sess-empty h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.sess-primary {
+  appearance: none;
+  min-height: 46px;
+  padding: 0 25px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--sess-red);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@media (max-width: 374px) {
+  .sess-head {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .sess-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .sess-card {
+    padding: 13px;
+  }
+  .sess-head h1 {
+    font-size: 24px;
+  }
+  .sess-set-row {
+    gap: 5px;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .sess-set-idx {
+    font-size: 9.5px;
+  }
+  .sess-set-action {
+    font-size: 9.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sess-set,
+  .sess-bar i,
+  .sess-exit,
+  .sess-remove,
+  .sess-set-action,
+  .sess-add-set,
+  .sess-save,
+  .sess-continue,
+  .sess-finish {
+    transition: none;
+  }
+}

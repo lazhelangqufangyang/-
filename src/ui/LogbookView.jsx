@@ -1,192 +1,221 @@
-import { useEffect, useMemo, useState } from 'react';
-import { addDaysIso, todayIso, uid } from '../engine/time.js';
-import { buildEntries, daySquares, rangeStats, weeksToCover } from '../engine/logbook.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { todayIso, uid } from '../engine/time.js';
+import { buildEntries, daySquares, weeksToCover } from '../engine/logbook.js';
 import { AREA_OPTIONS } from '../engine/areas.js';
 import { byId } from '../engine/exercises.js';
 import EffortSlider from './EffortSlider.jsx';
-/** 挑了什么动作就倒推出这是什么运动：有氧动作进「有氧」，力量动作进「力量」 */
+import './logbook.css';
+
+/**
+ * ?demo=1 时用假数据演示「背部 / 手臂」按部位分组。
+ * 正常访问仍然只读真实记录；假数据不会写进 localStorage。
+ */
+const DEMO = new URLSearchParams(window.location.search).get('demo') === '1';
+const DEMO_DATE = '2026-11-07';
+const MOCK_ACTIONS = [
+    { id: 'mock-back-1', part: '背', title: '引体向上', core: '3组 × 12', sets: 3 },
+    { id: 'mock-arm-1', part: '手臂', title: '绳索臂屈伸', core: '3组 × 12', sets: 3 },
+    { id: 'mock-arm-2', part: '手臂', title: '哑铃弯举', core: '3组 × 10', sets: 3 }
+];
+const DEMO_ENTRY = {
+    date: DEMO_DATE,
+    weekday: 6,
+    dayName: '周六',
+    title: '背部 / 手臂',
+    lines: [],
+    activities: [],
+    parts: ['背', '手臂'],
+    setCount: 9,
+    plannedSets: 9,
+    completion: 100,
+    overLogged: false,
+    tonnage: 0,
+    hasLoadable: false,
+    minutes: null,
+    cardioMin: 0,
+    plannedCardioMin: 0,
+    bestCount: 0,
+    demo: true
+};
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const PART_ORDER = [...AREA_OPTIONS, '有氧', '其他'];
+const PART_META = {
+    胸: { label: '胸部', emoji: '💪', short: '胸', bg: '#fdecef', ink: '#b32c45' },
+    背: { label: '背部', emoji: '💪', short: '背', bg: '#e9f0ff', ink: '#315bb5' },
+    肩: { label: '肩部', emoji: '🏋️', short: '肩', bg: '#f0ebff', ink: '#6541b8' },
+    手臂: { label: '手臂', emoji: '🦾', short: '臂', bg: '#fff2df', ink: '#a66112' },
+    腿: { label: '腿部', emoji: '🦵', short: '腿', bg: '#e8f7ed', ink: '#247348' },
+    臀: { label: '臀部', emoji: '🍑', short: '臀', bg: '#fff0f4', ink: '#b33c67' },
+    核心: { label: '核心', emoji: '🎯', short: '核', bg: '#fbf5d9', ink: '#8a6a10' },
+    有氧: { label: '有氧', emoji: '🔥', short: '氧', bg: '#fdecef', ink: '#b32c45' },
+    其他: { label: '其他', emoji: '✨', short: '其', bg: '#f1f2f5', ink: '#6b7280' }
+};
+const metaOf = (part) => PART_META[part] ?? PART_META.其他;
+const canonicalPart = (part) => {
+    if (!part) return '其他';
+    if (part === '二头' || part === '三头' || part === '三头长头' || part === '肱' || part.includes('手臂')) return '手臂';
+    if (part === '大腿' || part === '股四' || part === '腘绳' || part === '小腿' || part.includes('腿')) return '腿';
+    if (part === '背' || part === '背阔' || part === '斜方' || part === '后背' || part === '背中部' || part === '菱形肌' || part === '后链') return '背';
+    if (part === '三角' || part === '三角前束' || part === '三角中束' || part === '三角后束' || part === '后束' || part === '肩袖') return '肩';
+    if (part === '胸上部') return '胸';
+    if (part === '腹') return '核心';
+    return part;
+};
+const partRank = (part) => {
+    const i = PART_ORDER.indexOf(part);
+    return i < 0 ? 99 : i;
+};
+function dayLabel(iso) {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${m}月${d}日`;
+}
+function weekdayOfIso(iso) {
+    return WEEKDAYS[new Date(`${iso}T00:00:00`).getDay()];
+}
 function kindOf(exIds) {
-    if (!exIds.length)
-        return 'other';
+    if (!exIds.length) return 'other';
     return exIds.some((id) => byId(id)?.pattern === 'cardio') ? 'cardio' : 'lift';
 }
 const exNames = (exIds) => exIds.map((id) => byId(id)?.name ?? '').filter(Boolean).join('、');
-/** 详情行右边那一串：挑的动作（和名字不重复时）、点的部位、状态、备注 */
-const actExtra = (a) => {
-    const names = exNames(a.exIds);
-    return [
-        names && names !== a.name ? names : '',
-        a.areas.length ? a.areas.join('、') : '',
-        a.feel !== null ? `状态 ${a.feel}/5` : '',
-        a.note
-    ]
-        .filter(Boolean)
-        .join(' · ');
-};
-export default function LogbookView({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onAdd, onRemove, onRemoveDay, onGoToday }) {
-    const today = todayIso();
-    const entries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
-    const thisWeek = rangeStats(entries, addDaysIso(today, -6), today);
-    const lastWeek = rangeStats(entries, addDaysIso(today, -13), addDaysIso(today, -7));
-    const weekDelta = (cur, prev) => {
-        if (!prev) return null;
-        const pct = Math.round((cur / prev - 1) * 100);
-        return { pct, up: pct >= 0 };
-    };
-    const stats = [
-        { label: '练过次数', value: thisWeek.sessions, suffix: '次', delta: weekDelta(thisWeek.sessions, lastWeek.sessions) },
-        { label: '记下组数', value: thisWeek.sets, suffix: '组', delta: weekDelta(thisWeek.sets, lastWeek.sets) },
-        { label: '自己记的活动', value: thisWeek.acts, suffix: '条', delta: weekDelta(thisWeek.acts, lastWeek.acts) },
-        { label: '负重总量', value: thisWeek.tonnage.toLocaleString('zh-CN'), suffix: 'kg', delta: weekDelta(thisWeek.tonnage, lastWeek.tonnage) }
-    ];
-    // 日历默认只铺三周，更早的记录点「全部」一次摊开
-    const [allOpen, setAllOpen] = useState(false);
-    const weeks = allOpen ? weeksToCover(entries, today) : 3;
-    const squares = useMemo(() => daySquares(entries, today, weeks), [entries, today, weeks]);
-    // 从「动作」页挑完回来：接着摊开表单、选中那天的日期
-    const [sel, setSel] = useState(recPick?.date ?? today);
-    const toggleAll = () => {
-        if (allOpen)
-            setSel(today);
-        setAllOpen(!allOpen);
-    };
-    const [adding, setAdding] = useState(!!recPick);
-    const [confirmId, setConfirmId] = useState('');
-    const [confirmDay, setConfirmDay] = useState('');
-    /** 刚记上那条的那天：格子演一次灌水，演完就摘掉，不留在类名上 */
-    const [floodDay, setFloodDay] = useState('');
-    useEffect(() => {
-        if (!floodDay)
-            return undefined;
-        const t = setTimeout(() => setFloodDay(''), 700);
-        return () => clearTimeout(t);
-    }, [floodDay]);
-    const addAndFlood = (a) => {
-        onAdd(a);
-        setFloodDay(a.date);
-    };
-    const entry = entries.find((e) => e.date === sel) ?? null;
-    const selIdx = squares.findIndex((s) => s.date === sel);
-    const todayIdx = squares.findIndex((s) => s.date === today);
-    // 更早/更新按周翻页：整块最多摊成三行，一次挪一周还留在同一张图里
-    const shift = (by) => {
-        const i = Math.min(Math.max(0, todayIdx), Math.max(0, selIdx + by));
-        setSel(squares[i].date);
-    };
-    // 月份显示
-    const selMonth = Number(sel.slice(5, 7));
-    const selYear = sel.slice(0, 4);
-    // 一天一格的行宽是七的倍数，选中之后保证它落在视野里就够了，不用自己滚
-    useEffect(() => {
-        document.getElementById('lb-sel')?.scrollIntoView({ block: 'nearest' });
-    }, [sel]);
-    return (<div>
-      <div className="card lb-cards-gap">
-        <div className="lb-stats-grid">
-          {stats.map((s) => (<div className="lb-stat" key={s.label}>
-            <div className="lb-stat-label">{s.label}</div>
-            <div className="lb-stat-value num">
-              {s.value}
-              <span className="lb-stat-suffix">{s.suffix}</span>
-            </div>
-            {s.delta ? (<div className={`lb-stat-delta${s.delta.up ? ' up' : ' down'}`}>
-                {s.delta.up ? '↑' : '↓'} {Math.abs(s.delta.pct)}%
-              </div>) : (<div className="lb-stat-delta faint small">—</div>)}
-          </div>))}
-        </div>
-      </div>
 
-      <div className="card">
-        <div className="lb-cal-head">
-          <button className="lb-nav-arrow" onClick={() => shift(-7)} disabled={selIdx <= 0} aria-label="早一周">‹</button>
-          <div className="lb-month-title">{selYear}年 {selMonth}月</div>
-          <button className="lb-nav-arrow" onClick={() => shift(7)} disabled={selIdx >= todayIdx} aria-label="晚一周">›</button>
-        </div>
-        <div className="lb-cal-sub">
-          <span className="faint small">
-            {squares[0]?.date.slice(5).replace('-', '/')}–{squares.at(-1)?.date.slice(5).replace('-', '/')}
-          </span>
-          <button className="lb-filter-toggle" onClick={toggleAll}>
-            {allOpen ? '只看三周' : '全部记录 ▾'}
-          </button>
-        </div>
-        <div className="lb-week-row">
-          {['一', '二', '三', '四', '五', '六', '日'].map((w) => (<span key={w}>{w}</span>))}
-        </div>
-        <div className="lb-grid">
-          {squares.map((s) => (<button key={s.date} id={sel === s.date ? 'lb-sel' : undefined} className={`lb-sq${s.tone === 'done' ? ' done' : ''}${s.future ? ' future' : ''}${sel === s.date ? ' on' : ''}${floodDay === s.date ? ' flood' : ''}${s.date === today ? ' today' : ''}`} aria-pressed={sel === s.date} disabled={s.future} onClick={() => setSel(s.date)} title={`${s.date} ${s.dayName}${s.parts.length ? ' · ' + s.parts.join('、') : ''}`}>
-              <span className="lb-sq-d num">{s.day}</span>
-              {s.parts.length ? (<span className="lb-sq-tags">
-                  {s.parts.slice(0, 3).map((p) => (<i key={p} className="lb-sq-tag">{p.slice(0, 1)}</i>))}
-                  {s.parts.length > 3 ? <i className="lb-sq-tag more">+{s.parts.length - 3}</i> : null}
-                </span>) : s.cardioMin ? (<span className="lb-sq-tags"><i className="lb-sq-tag cardio">有氧</i></span>) : (<span className="lb-sq-tags">
-                  <span className="lb-sq-dot"/>
-                </span>)}
-            </button>))}
-        </div>
-        <div className="lb-legend">
-          <span><i className="lb-leg done"/>已记录</span>
-          <span><i className="lb-leg none"/>未记录</span>
-          <span><i className="lb-leg future"/>未来</span>
-        </div>
+/** 动作行统一成 { part, title, core }，分组时只按 part 过滤，绝不串组 */
+function actionsOf(entry, demoActions) {
+    if (!entry) return [];
+    if (entry.demo) return demoActions.map((a) => ({ ...a, type: 'demo' }));
+    const actions = [];
+    for (const line of entry.lines) {
+        const first = line.perSet?.[0] ?? '';
+        const reps = first.match(/×\s*(\d+)(?!\s*组)/)?.[1] ?? '';
+        actions.push({
+            id: `set:${line.exId}:${line.name}`,
+            type: 'set',
+            part: line.part ?? '其他',
+            title: line.name,
+            core: reps ? `${line.sets}组 × ${reps}` : `${line.sets} 组`,
+            exId: line.exId
+        });
+    }
+    for (const a of entry.activities) {
+        const parts = a.parts?.length ? a.parts : [a.part ?? '其他'];
+        for (const part of parts) {
+            actions.push({
+                id: `act:${a.id}:${part}`,
+                type: 'act',
+                part,
+                title: a.name,
+                core: a.minutes ? `${a.minutes} 分钟` : '记录',
+                actId: a.id
+            });
+        }
+    }
+    return actions;
+}
 
-        <div className="lb-done-head">
-          <b>{selMonth}月{Number(sel.slice(8))}日 {['周日','周一','周二','周三','周四','周五','周六'][new Date(sel + 'T00:00:00').getDay()]}</b>
-          <span className="faint small lb-done-when">
-            {entry ? `${entry.title} · ${entry.setCount}组${entry.activities.length ? ` · ${entry.activities.length}条活动` : ''}` : '这天还没练'}
-          </span>
-          {entry && (entry.setCount || entry.activities.length) ? (<button className={`lb-day-del${confirmDay === sel ? ' on' : ''}`} title={confirmDay === sel ? '再点一次确认删掉这天所有记录' : '删掉这天所有记录'} onClick={() => {
-                    if (confirmDay !== sel) {
-                        setConfirmDay(sel);
-                        return;
-                    }
-                    onRemoveDay(sel);
-                    setConfirmDay('');
-                    setAdding(false);
-                }}>
-              {confirmDay === sel ? '确认✕' : '✕'}
-            </button>) : null}
-        </div>
-        {entry ? (<DayDone entry={entry} confirmId={confirmId} onAskDelete={(id) => setConfirmId(confirmId === id ? '' : id)} onDelete={(id) => {
-                onRemove(id);
-                setConfirmId('');
-            }}/>) : (<div className="lb-empty">
-            <div className="lb-empty-ico" aria-hidden="true">
-              <svg viewBox="0 0 48 48" width="56" height="56" fill="none">
-                <circle cx="24" cy="38" r="3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <path d="M24 34V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <path d="M24 26l6-4M24 26l-6-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M24 34l7-7M24 34l-7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="24" cy="14" r="4" stroke="currentColor" strokeWidth="2"/>
-              </svg>
-            </div>
-            <b>这一天还是一片空白</b>
-            <span className="faint small">动起来吧，在运动页练完记组，或者下面手动加一条</span>
-          </div>)}
-
-        <div className="btnbar" style={{ marginTop: 10 }}>
-          <button className={`btn big addact${adding ? ' ghost' : ' primary'}`} onClick={() => {
-                setAdding(!adding);
-                if (adding)
-                    onPickDone();
-            }}>
-            {adding ? '收起' : '＋ 加运动'}
-          </button>
-          {entry ? (<button className="btn ghost big" onClick={onGoToday}>
-              回运动
-            </button>) : null}
-        </div>
-        {adding ? (<AddForm date={sel} recPicks={recPick?.exIds ?? []} onGoPick={onStartPick} onTogglePick={onToggleRecPick} onAdd={addAndFlood} onDone={() => {
-                setAdding(false);
-                onPickDone();
-            }}/>) : null}
+function SwipeAction({ onDelete, children }) {
+    const [dx, setDx] = useState(0);
+    const [open, setOpen] = useState(false);
+    const start = useRef(null);
+    const moved = useRef(false);
+    const dxRef = useRef(0);
+    const suppressClick = useRef(false);
+    const down = (e) => {
+        start.current = { x: e.clientX, y: e.clientY, base: open ? -74 : 0 };
+        moved.current = false;
+        suppressClick.current = false;
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+    };
+    const move = (e) => {
+        if (!start.current) return;
+        const mx = e.clientX - start.current.x;
+        const my = e.clientY - start.current.y;
+        if (!moved.current) {
+            if (Math.abs(mx) < 6 || Math.abs(my) > Math.abs(mx)) return;
+            moved.current = true;
+        }
+        const next = Math.max(-88, Math.min(0, start.current.base + mx));
+        dxRef.current = next;
+        setDx(next);
+    };
+    const up = () => {
+        if (!start.current) return;
+        if (moved.current) {
+            suppressClick.current = true;
+            if (dxRef.current <= -62) {
+                onDelete();
+                setDx(0);
+                setOpen(false);
+            } else if (dxRef.current <= -22) {
+                setDx(-74);
+                setOpen(true);
+            } else {
+                setDx(0);
+                setOpen(false);
+            }
+        }
+        start.current = null;
+        moved.current = false;
+    };
+    const close = () => {
+        if (suppressClick.current) {
+            suppressClick.current = false;
+            return;
+        }
+        if (!open) return;
+        setDx(0);
+        setOpen(false);
+    };
+    return (<div className="rec-swipe">
+      <button type="button" className="rec-swipe-del" onClick={onDelete} aria-label="删除这条记录">
+        删除
+      </button>
+      <div className="rec-action-card" style={{ transform: `translateX(${dx}px)` }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={close}>
+        {children}
       </div>
     </div>);
 }
-function AddForm({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }) {
+
+function RecordGroups({ actions, onDelete }) {
+    const partNames = [...new Set(actions.map((a) => a.part))].sort((a, b) => partRank(a) - partRank(b));
+    return (<div className="rec-groups">
+      {partNames.map((partName) => {
+          // 严格按部位分组：动作属于哪个 part，就只会出现在哪个分组里
+          const groupItems = actions.filter(action => action.part === partName);
+          const meta = metaOf(partName);
+          return (<section className="rec-group" key={partName}>
+            <div className="rec-group-head" style={{ background: meta.bg, color: meta.ink }}>
+              <span className="rec-group-emoji" aria-hidden="true">{meta.emoji}</span>
+              <b>{meta.label}</b>
+              <span className="rec-group-count">({groupItems.length})</span>
+            </div>
+            <div className="rec-group-list">
+              {groupItems.map((action) => (<SwipeAction key={action.id} onDelete={() => onDelete(action)}>
+                <div className="rec-action-main">
+                  <b>{action.title}</b>
+                </div>
+                <span className="rec-action-core num">{action.core}</span>
+              </SwipeAction>))}
+            </div>
+          </section>);
+      })}
+    </div>);
+}
+
+function EmptyDay() {
+    return (<div className="rec-day-empty">
+      <span className="rec-day-empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M4 9.5v5M7 7v10M17 7v10M20 9.5v5M7 12h10"/>
+        </svg>
+      </span>
+      <b>这天没有记录</b>
+    </div>);
+}
+
+function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }) {
     const [areas, setAreas] = useState([]);
     const [feel, setFeel] = useState(null);
     const [note, setNote] = useState('');
+    const [effortOpen, setEffortOpen] = useState(false);
     const toggleArea = (a) => setAreas((cur) => (cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a]));
     const save = () => {
         const name = exNames(recPicks) || (areas.length ? areas.join('、') : '练了一场');
@@ -204,149 +233,173 @@ function AddForm({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }) {
         });
         onDone();
     };
-    return (<div style={{ marginTop: 10 }}>
-      <div className="field">
-        <label>做了什么动作（可以不选）</label>
-        {recPicks.length ? (<div className="chips">
-            {recPicks.map((id) => (<button key={id} className="chip" aria-pressed onClick={() => onTogglePick(id)}>
-                {byId(id)?.name ?? id} ×
-              </button>))}
-          </div>) : null}
-        <button className="btn ghost" style={{ width: '100%' }} onClick={() => onGoPick(date)}>
-          去「动作」页挑{recPicks.length ? ` · 已选 ${recPicks.length} 个` : ''}
+    return (<div className="rec-add-page">
+      <header className="rec-add-head">
+        <button type="button" className="rec-add-back" onClick={onDone}>
+          <span aria-hidden="true">‹</span> 返回
         </button>
-      </div>
-      <div className="field">
-        <label>练了哪里（可以不选）</label>
-        <div className="chips">
-          {AREA_OPTIONS.map((a) => (<button key={a} className="chip" aria-pressed={areas.includes(a)} onClick={() => toggleArea(a)}>
+        <h1>添加记录</h1>
+        <span className="rec-add-date num">{dayLabel(date)}</span>
+      </header>
+
+      <main className="rec-add-body">
+        <div className="rec-add-section">
+          <div className="rec-add-label">
+            <span>动作</span>
+            {recPicks.length ? <em>{recPicks.length} 个</em> : null}
+          </div>
+          {recPicks.length ? (<div className="rec-picked-chips">
+            {recPicks.map((id) => (<button key={id} type="button" className="rec-picked-chip" onClick={() => onTogglePick(id)}>
+              {byId(id)?.name ?? id}<span aria-hidden="true">×</span>
+            </button>))}
+          </div>) : (<div className="rec-add-empty">
+            <span className="rec-add-empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                <path d="M4 9.5v5M7 7v10M17 7v10M20 9.5v5M7 12h10"/>
+              </svg>
+            </span>
+            <span>还没选动作</span>
+          </div>)}
+          <button type="button" className="rec-pick-btn" onClick={() => onGoPick(date)}>
+            <span className="rec-pick-plus">＋</span>
+            去「动作」页挑
+            {recPicks.length ? <span className="rec-pick-count">已选 {recPicks.length} 个</span> : null}
+          </button>
+        </div>
+
+        <div className="rec-add-section">
+          <div className="rec-add-label"><span>练了哪里</span></div>
+          <div className="rec-area-chips">
+            {AREA_OPTIONS.map((a) => (<button key={a} type="button" className={`rec-area-chip${areas.includes(a) ? ' on' : ''}`} aria-pressed={areas.includes(a)} onClick={() => toggleArea(a)}>
               {a}
             </button>))}
+          </div>
         </div>
-      </div>
-      <EffortSlider value={feel} onChange={setFeel}/>
-      <div className="field">
-        <label>备注（可空）</label>
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例：心率很高，跑走交替"/>
-      </div>
-      <div className="btnbar">
-        <button className="btn primary" onClick={save}>
-          记下
-        </button>
-        <button className="btn ghost" onClick={onDone}>
-          返回
-        </button>
+
+        <section className={`rec-acc${effortOpen ? ' open' : ''}`}>
+          <button type="button" className="rec-acc-head" aria-expanded={effortOpen} onClick={() => setEffortOpen((v) => !v)}>
+            <span className="rec-acc-caret" aria-hidden="true">▶</span>
+            <span>记录这组有多累（RPE）</span>
+            <b className="rec-acc-value num">{feel === null ? '未填' : `RPE ${feel}`}</b>
+          </button>
+          {effortOpen ? (<div className="rec-acc-panel">
+            <EffortSlider value={feel} onChange={setFeel}/>
+          </div>) : null}
+        </section>
+
+        <label className="rec-add-note">
+          <span>备注</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="可留空" aria-label="备注"/>
+        </label>
+      </main>
+
+      <div className="rec-add-foot">
+        <button type="button" className="rec-add-save" onClick={save}>记下</button>
+        <button type="button" className="rec-add-cancel" onClick={onDone}>返回</button>
       </div>
     </div>);
 }
-/** 部位的分组顺序跟「动作」页一致，有氧和其他排在最后 */
-const PART_ORDER = [...AREA_OPTIONS, '有氧', '其他'];
-const partRank = (k) => {
-    const i = PART_ORDER.indexOf(k);
-    return i < 0 ? 99 : i;
-};
-/** 按组记的动作和手记的运动合成同一张清单：都是做完的运动，一律带对勾，不再分两栏 */
-function doneRows(entry) {
-    const setRows = entry.lines.map((l) => ({
-        key: `set:${l.name}`,
-        part: l.part ?? '其他',
-        left: `${l.sets} 组`,
-        sets: l.sets,
-        title: l.name,
-        meta: l.perSet.join(' / '),
-        best: l.best
-    }));
-    // activity 可能涉及多个部位（用户点了多个 areas、或挑了多个不同部位的动作），
-    // 拆成多行分别归入对应分组，而不是全归第一个部位
-    const actRows = [];
-    for (const a of entry.activities) {
-        const parts = a.parts?.length ? a.parts : [a.part ?? '其他'];
-        for (const p of parts) {
-            actRows.push({
-                key: `act:${a.id}:${p}`,
-                part: p,
-                left: a.minutes ? `${a.minutes} 分钟` : '记录',
-                sets: 0,
-                title: a.name,
-                meta: actExtra(a)
-                    .split(' · ')
-                    .filter((x) => x && x !== a.part && x !== p)
-                    .join(' · '),
-                act: a
-            });
+
+export default function LogbookView({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onAdd, onRemove, onRemoveExercise, onGoToday }) {
+    const today = todayIso();
+    const realEntries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
+    const [demoActions, setDemoActions] = useState(MOCK_ACTIONS);
+    const demoEntry = useMemo(() => ({
+        ...DEMO_ENTRY,
+        parts: [...new Set(demoActions.map((a) => a.part))],
+        setCount: demoActions.reduce((n, a) => n + (a.sets ?? 0), 0)
+    }), [demoActions]);
+    const entries = useMemo(() => (DEMO
+        ? [demoEntry, ...realEntries.filter((e) => e.date !== DEMO_DATE)]
+        : realEntries), [demoEntry, realEntries]);
+    const [allOpen, setAllOpen] = useState(false);
+    const weeks = allOpen ? weeksToCover(entries, today) : 3;
+    const squares = useMemo(() => daySquares(entries, today, weeks), [entries, today, weeks]);
+    const [sel, setSel] = useState(recPick?.date ?? (DEMO ? DEMO_DATE : today));
+    const [adding, setAdding] = useState(!!recPick);
+    const selIdx = squares.findIndex((s) => s.date === sel);
+    const entry = entries.find((e) => e.date === sel) ?? null;
+    const actions = actionsOf(entry, demoActions);
+    const dateName = entry?.dayName ?? weekdayOfIso(sel);
+    const onlyRecord = Boolean(entry && (entry.demo || (!entry.setCount && entry.activities.length > 0)));
+    const shift = (by) => {
+        const next = squares[selIdx + by];
+        if (next) setSel(next.date);
+    };
+    const toggleAll = () => {
+        if (allOpen) setSel(DEMO ? DEMO_DATE : today);
+        setAllOpen(!allOpen);
+    };
+    useEffect(() => {
+        if (!adding) return undefined;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, [adding]);
+    const removeAction = (action) => {
+        if (action.type === 'demo') {
+            setDemoActions((cur) => cur.filter((a) => a.id !== action.id));
+            return;
         }
-    }
-    return [...setRows, ...actRows];
-}
-/** 部位 → Emoji 图标 */
-const PART_EMOJI = {
-  胸: '💪',
-  背: '🦾',
-  肩: '🏋️',
-  手臂: '💪',
-  腿: '🦵',
-  臀: '🍑',
-  核心: '🎯',
-  有氧: '🔥',
-  其他: '✨'
-};
-/** 部位 → 柔和背景色 */
-const PART_TINT = {
-  胸: '#fdecef',
-  背: '#e8f1ff',
-  肩: '#f0ebff',
-  手臂: '#fef3e2',
-  腿: '#e6f7ed',
-  臀: '#fff0f4',
-  核心: '#fef9e2',
-  有氧: '#fdecef',
-  其他: '#f4f5f9'
-};
-function DayDone({ entry, confirmId, onAskDelete, onDelete }) {
-    const rows = doneRows(entry);
-    const grouped = new Map();
-    for (const r of rows)
-        grouped.set(r.part, [...(grouped.get(r.part) ?? []), r]);
-    const groups = [...grouped.entries()].sort((a, b) => partRank(a[0]) - partRank(b[0]));
-    const onlyActivity = !entry.setCount && entry.activities.length > 0 && entry.lines.length === 0;
-    // feel 汇总：取 activity 的 feel 中位数（0 表示没记状态）
-    const feels = entry.activities.map((a) => a.feel).filter((f) => f !== null && f !== undefined);
-    const medianFeel = feels.length ? feels.sort((a, b) => a - b)[Math.floor(feels.length / 2)] : null;
-    return (<div className="lb-detail">
-      <div className="lb-detail-meta">
-        {entry.cardioMin ? <span className="lb-tag cardio">有氧 {entry.cardioMin}分</span> : null}
-        {entry.tonnage ? <span className="lb-tag tonnage">{entry.tonnage.toLocaleString('zh-CN')} kg</span> : null}
-        {entry.bestCount ? <span className="lb-tag best">{entry.bestCount}个新高</span> : null}
-        {medianFeel !== null ? <span className={`lb-tag feel feel-${medianFeel}`}>状态 {medianFeel}/5</span> : null}
-        {onlyActivity ? <span className="lb-tag plain">仅记录</span> : null}
-        {entry.completion !== null && entry.lines.length > 0 ? <span className="lb-tag done">完成 {entry.completion}%</span> : null}
+        if (action.type === 'set') {
+            onRemoveExercise?.(sel, action.exId);
+            return;
+        }
+        if (action.type === 'act') onRemove(action.actId);
+    };
+    const closeAdd = () => {
+        setAdding(false);
+        onPickDone();
+    };
+    const selMonth = sel.slice(0, 7);
+    return (<div className="logbook-page">
+      <section className="rec-cal">
+        <div className="rec-cal-head">
+          <div className="rec-cal-month num">{selMonth.replace('-', '年')}月</div>
+          <div className="rec-cal-tools">
+            <button type="button" className="rec-cal-all" onClick={toggleAll}>{allOpen ? '近三周' : '全部'}</button>
+            <button type="button" className="rec-cal-arrow" onClick={() => shift(-7)} disabled={selIdx <= 0} aria-label="早一周">‹</button>
+            <button type="button" className="rec-cal-arrow" onClick={() => shift(7)} disabled={selIdx < 0 || selIdx >= squares.length - 1} aria-label="晚一周">›</button>
+          </div>
+        </div>
+        <div className="rec-week-row">
+          {['一', '二', '三', '四', '五', '六', '日'].map((w) => <span key={w}>{w}</span>)}
+        </div>
+        <div className="rec-grid">
+          {squares.map((s) => {
+              const normalized = [...new Set(s.parts.map(canonicalPart))].filter((p) => p !== '其他').sort((a, b) => partRank(a) - partRank(b));
+              const tags = (normalized.length ? normalized : s.parts).slice(0, 2);
+              return (<button key={s.date} type="button" className={`rec-day${s.date === sel ? ' selected' : ''}${s.date === today ? ' today' : ''}${s.future ? ' future' : ''}${s.tone === 'done' ? ' done' : ''}`} disabled={s.future} aria-pressed={s.date === sel} onClick={() => setSel(s.date)} title={`${s.date} ${s.dayName}${tags.length ? ' · ' + tags.map((p) => metaOf(p).label).join('、') : ''}`}>
+                <span className="rec-day-num num">{Number(s.day)}</span>
+                <span className="rec-day-tags">
+                  {tags.map((p) => {
+                      const m = metaOf(p);
+                      return <i key={p} className="rec-day-tag" style={{ background: m.bg, color: m.ink }}>{m.short}</i>;
+                  })}
+                  {!tags.length && s.cardioMin ? <i className="rec-day-tag" style={{ background: '#fdecef', color: '#b32c45' }}>氧</i> : null}
+                  {!tags.length && !s.cardioMin && s.tone === 'done' ? <i className="rec-day-dot"/> : null}
+                </span>
+              </button>);
+          })}
+        </div>
+      </section>
+
+      <section className="rec-detail">
+        <div className="rec-detail-head">
+          <h2>{dayLabel(sel)} <span>{dateName}</span></h2>
+          {entry && actions.length ? <span className="rec-detail-tag">{onlyRecord ? '仅记录' : '训练'}</span> : null}
+        </div>
+        {entry && actions.length ? <RecordGroups actions={actions} onDelete={removeAction}/> : <EmptyDay/>}
+      </section>
+
+      <div className="rec-bottom-space" aria-hidden="true"/>
+      <div className="rec-dock">
+        <button type="button" className="rec-dock-add" onClick={() => setAdding(true)}>
+          <span aria-hidden="true">＋</span>加运动
+        </button>
+        <button type="button" className="rec-dock-back" onClick={onGoToday}>回运动</button>
       </div>
 
-      {groups.map(([part, items]) => {
-            const sets = items.reduce((n, r) => n + r.sets, 0);
-            const tint = PART_TINT[part] ?? 'var(--bg-sunken)';
-            return (<div className="lb-grp" key={part}>
-              <div className="lb-grp-head" style={{ background: tint }}>
-                <span className="lb-grp-emoji" aria-hidden="true">{PART_EMOJI[part] ?? '✨'}</span>
-                <b>{part}</b>
-                <span className="lb-grp-count num">{items.length}</span>
-                {sets ? <span className="lb-grp-sets num">· {sets}组</span> : null}
-              </div>
-              <div className="lb-chips">
-                {items.map((r) => {
-                    const chipConfirm = r.act && confirmId === r.act.id;
-                    return (<div key={r.key} className={`lb-chip${chipConfirm ? ' on' : ''}`}>
-                        <span className="lb-chip-name">{r.title}</span>
-                        {r.sets > 0 ? <span className="lb-chip-sub num">{r.sets}组×{r.meta?.match(/\d+/)?.[0] ?? ''}</span> : null}
-                        {!r.sets && r.left ? <span className="lb-chip-sub num">{r.left}</span> : null}
-                        {r.meta && r.meta !== r.title ? <span className="lb-chip-meta">{r.meta}</span> : null}
-                        {r.act ? (chipConfirm ? (<button className="lb-chip-confirm" onClick={() => {
-                                        onDelete(r.act.id);
-                                    }}>确认删除</button>) : (<button className="lb-chip-del" title="删除这条手记" onClick={() => onAskDelete(r.act.id)}>✕</button>)) : null}
-                      </div>);
-                })}
-              </div>
-            </div>);
-        })}
+      {adding ? (<AddRecordPage date={sel} recPicks={recPick?.exIds ?? []} onGoPick={onStartPick} onTogglePick={onToggleRecPick} onAdd={onAdd} onDone={closeAdd}/>) : null}
     </div>);
 }

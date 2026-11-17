@@ -945,13 +945,27 @@ function resequence(slot) {
 function withSlot(sheet, slotId, fn) {
     return { ...sheet, slots: sheet.slots.map((s) => (s.id === slotId ? fn(s) : s)) };
 }
-/** 手动加一组：照最后一组的剂量再排一组 */
-export function addPlannedSet(sheet, slotId) {
+/** 手动加一组：照最后一组（优先用已记下的实际值）再排一组 */
+export function addPlannedSet(sheet, slotId, logs = []) {
     return withSlot(sheet, slotId, (slot) => {
         const last = slot.setPlan.at(-1);
         if (!last)
             return slot;
-        return resequence({ ...slot, setPlan: [...slot.setPlan, { ...last, drop: false }] });
+        const lastIdx = slot.setPlan.length - 1;
+        const prevLog = logs
+            .filter((l) => l.slotId === slotId && l.sheetId === sheet.id && l.setIdx === lastIdx)
+            .sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')))
+            .at(-1);
+        const next = {
+            ...last,
+            drop: false,
+            ...(prevLog ? {
+                weightKg: prevLog.weightKg,
+                reps: prevLog.reps,
+                rpe: prevLog.rpe ?? last.rpe
+            } : {})
+        };
+        return resequence({ ...slot, setPlan: [...slot.setPlan, next] });
     });
 }
 /**

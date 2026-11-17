@@ -1,0 +1,190 @@
+/* 完成训练后：MatchaPowderReveal + 勋章 */
+.matcha-reward-overlay {
+  position: fixed;
+  z-index: 999;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.matcha-reward-stage {
+  width: 100%;
+  max-width: 768px;
+  height: 700px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 26px;
+  background:
+    radial-gradient(48% 52% at 50% 48%, rgba(76, 124, 82, 0.22) 0%, rgba(12, 13, 15, 0) 72%),
+    #0d0f11;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+}
+
+.matcha-reward-motion {
+  width: 100%;
+  display: block;
+  transform: scale(2.05);
+  transform-origin: 50% 50%;
+}
+
+.matcha-badge-overlay {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 43%, rgba(0, 0, 0, 0.16) 0%, rgba(0, 0, 0, 0.66) 62%, rgba(0, 0, 0, 0.82) 100%);
+}
+
+.matcha-badge-medal {
+  width: 160px;
+  height: 160px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 250, 219, 0.72);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #fff1b8 0%, #f6cf64 32%, #c58a22 68%, #ffe395 100%);
+  box-shadow:
+    0 0 0 8px rgba(255, 215, 0, 0.08),
+    0 0 52px rgba(255, 215, 0, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -10px 20px rgba(120, 74, 9, 0.32);
+  font-size: 58px;
+  line-height: 1;
+}
+
+.matcha-badge-overlay h2 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.matcha-badge-overlay p {
+  margin: 0 0 30px;
+  color: #d1d5db;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.matcha-badge-overlay button {
+  appearance: none;
+  min-height: 54px;
+  padding: 0 46px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 140ms ease, background 160ms ease;
+}
+
+.matcha-badge-overlay button:hover {
+  background: #e5e7eb;
+  transform: scale(1.03);
+}
+
+.matcha-badge-overlay button:active {
+  transform: scale(0.95);
+}
+
+.matcha-reward-hint-bar {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  right: 0;
+  bottom: 62px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.matcha-reward-hint-bar p {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.5;
+  animation: matchaHintPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes matchaHintPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (max-height: 860px) {
+  .matcha-reward-stage {
+    height: 560px;
+  }
+}
+
+@media (max-height: 700px) {
+  .matcha-reward-stage {
+    height: 430px;
+  }
+  .matcha-badge-medal {
+    width: 126px;
+    height: 126px;
+    font-size: 46px;
+    margin-bottom: 16px;
+  }
+  .matcha-badge-overlay h2 {
+    font-size: 25px;
+  }
+  .matcha-badge-overlay p {
+    margin-bottom: 20px;
+  }
+  .matcha-badge-overlay button {
+    min-height: 48px;
+    padding: 0 34px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 374px) {
+  .matcha-reward-overlay {
+    padding: 10px;
+  }
+  .matcha-reward-stage {
+    height: 390px;
+  }
+  .matcha-badge-medal {
+    width: 118px;
+    height: 118px;
+    font-size: 42px;
+  }
+  .matcha-badge-overlay h2 {
+    font-size: 23px;
+  }
+  .matcha-reward-hint-bar {
+    bottom: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matcha-reward-hint-bar p {
+    animation: none;
+  }
+  .matcha-badge-overlay button {
+    transition: none;
+  }
+}
