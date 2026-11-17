@@ -3,7 +3,7 @@ import { addDaysIso, todayIso, uid } from '../engine/time.js';
 import { buildEntries, daySquares, rangeStats, weeksToCover } from '../engine/logbook.js';
 import { AREA_OPTIONS } from '../engine/areas.js';
 import { byId } from '../engine/exercises.js';
-import { loadLabel } from '../engine/load.js';
+import EffortSlider from './EffortSlider.jsx';
 /** 挑了什么动作就倒推出这是什么运动：有氧动作进「有氧」，力量动作进「力量」 */
 function kindOf(exIds) {
     if (!exIds.length)
@@ -152,6 +152,17 @@ export default function LogbookView({ sheets, logs, activities, recPick, onStart
           <span className="faint small lb-done-when">
             {entry ? `${sel.slice(5).replace('-', '/')} ${entry.dayName} · ${entry.title}` : `${sel.slice(5).replace('-', '/')} 没记录`}
           </span>
+          {entry && (entry.setCount || entry.activities.length) ? (<button className={`lb-day-del${confirmDay === sel ? ' on' : ''}`} title={confirmDay === sel ? '再点一次确认删掉这天所有记录' : '删掉这天所有记录'} onClick={() => {
+                    if (confirmDay !== sel) {
+                        setConfirmDay(sel);
+                        return;
+                    }
+                    onRemoveDay(sel);
+                    setConfirmDay('');
+                    setAdding(false);
+                }}>
+              {confirmDay === sel ? '确认✕' : '✕'}
+            </button>) : null}
         </div>
         {entry ? (<DayDone entry={entry} confirmId={confirmId} onAskDelete={(id) => setConfirmId(confirmId === id ? '' : id)} onDelete={(id) => {
                 onRemove(id);
@@ -167,46 +178,29 @@ export default function LogbookView({ sheets, logs, activities, recPick, onStart
                 if (adding)
                     onPickDone();
             }}>
-            {adding ? '收起' : '＋ 给这天加一条运动'}
+            {adding ? '收起' : '＋ 加运动'}
           </button>
           {entry ? (<button className="btn ghost big" onClick={onGoToday}>
               回运动
             </button>) : null}
         </div>
-        {entry && (entry.setCount || entry.activities.length) ? (<button className={`btn big${confirmDay === sel ? ' danger' : ' ghost'}`} style={{ marginTop: 8 }} onClick={() => {
-                if (confirmDay !== sel) {
-                    setConfirmDay(sel);
-                    return;
-                }
-                onRemoveDay(sel);
-                setConfirmDay('');
-                setAdding(false);
-            }}>
-            {confirmDay === sel
-                ? `确认删掉 ${sel} 的记录（${entry.setCount} 组 · ${entry.activities.length} 条）`
-                : '删掉这天的记录'}
-          </button>) : null}
-        {adding ? (<AddForm date={sel} today={today} recPicks={recPick?.exIds ?? []} onGoPick={onStartPick} onTogglePick={onToggleRecPick} onAdd={addAndFlood} onDone={() => {
+        {adding ? (<AddForm date={sel} recPicks={recPick?.exIds ?? []} onGoPick={onStartPick} onTogglePick={onToggleRecPick} onAdd={addAndFlood} onDone={() => {
                 setAdding(false);
                 onPickDone();
             }}/>) : null}
       </div>
     </div>);
 }
-function AddForm({ date, today, recPicks, onGoPick, onTogglePick, onAdd, onDone }) {
-    const [d, setD] = useState(date);
-    const [freeName, setFreeName] = useState('');
-    const [feel, setFeel] = useState(null);
+function AddForm({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }) {
     const [areas, setAreas] = useState([]);
+    const [feel, setFeel] = useState(null);
     const [note, setNote] = useState('');
     const toggleArea = (a) => setAreas((cur) => (cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a]));
-    const day = d > today || !/^\d{4}-\d{2}-\d{2}$/.test(d) ? today : d;
     const save = () => {
-        // 动作、部位、名字都能空着：这条记录要的就是「这天动过」
-        const name = freeName.trim() || exNames(recPicks) || (areas.length ? areas.join('、') : '练了一场');
+        const name = exNames(recPicks) || (areas.length ? areas.join('、') : '练了一场');
         onAdd({
             id: uid('act'),
-            date: day,
+            date,
             name,
             minutes: 0,
             kind: kindOf(recPicks),
@@ -220,8 +214,15 @@ function AddForm({ date, today, recPicks, onGoPick, onTogglePick, onAdd, onDone 
     };
     return (<div style={{ marginTop: 10 }}>
       <div className="field">
-        <label>哪天练的</label>
-        <input type="date" value={d} max={today} onChange={(e) => setD(e.target.value)}/>
+        <label>做了什么动作（可以不选）</label>
+        {recPicks.length ? (<div className="chips">
+            {recPicks.map((id) => (<button key={id} className="chip" aria-pressed onClick={() => onTogglePick(id)}>
+                {byId(id)?.name ?? id} ×
+              </button>))}
+          </div>) : null}
+        <button className="btn ghost" style={{ width: '100%' }} onClick={() => onGoPick(date)}>
+          去「动作」页挑{recPicks.length ? ` · 已选 ${recPicks.length} 个` : ''}
+        </button>
       </div>
       <div className="field">
         <label>练了哪里（可以不选）</label>
@@ -231,27 +232,7 @@ function AddForm({ date, today, recPicks, onGoPick, onTogglePick, onAdd, onDone 
             </button>))}
         </div>
       </div>
-      <div className="field">
-        <label>做了什么动作（可以不选）</label>
-        {recPicks.length ? (<div className="chips">
-            {recPicks.map((id) => (<button key={id} className="chip" aria-pressed onClick={() => onTogglePick(id)}>
-                {byId(id)?.name ?? id} ×
-              </button>))}
-          </div>) : null}
-        <button className="btn ghost" onClick={() => onGoPick(day)}>
-          去「动作」页选{recPicks.length ? ` · 已选 ${recPicks.length} 个` : ''}
-        </button>
-        <input value={freeName} onChange={(e) => setFreeName(e.target.value)} placeholder="也可以直接写做了什么，例：羽毛球双打 / 江边慢跑"/>
-      </div>
-      <div className="field">
-        <label>状态（可空）</label>
-        <div className="chips">
-          {[1, 2, 3, 4, 5].map((n) => (<button key={n} className="chip" aria-pressed={feel === n} onClick={() => setFeel(feel === n ? null : n)}>
-              {n}
-            </button>))}
-        </div>
-        <div className="faint small">{feel === null ? '1 是很累很差，5 是好。' : `状态 ${feel}/5。`}</div>
-      </div>
+      <EffortSlider value={feel} onChange={setFeel}/>
       <div className="field">
         <label>备注（可空）</label>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例：心率很高，跑走交替"/>
@@ -266,25 +247,37 @@ function AddForm({ date, today, recPicks, onGoPick, onTogglePick, onAdd, onDone 
       </div>
     </div>);
 }
-/** 部位的分组顺序跟「动作」页一致，有氧和其他运动排在最后 */
+/** 部位的分组顺序跟「动作」页一致，有氧和其他排在最后 */
 const PART_ORDER = [...AREA_OPTIONS, '有氧', '其他'];
-function groupLines(lines) {
-    const map = new Map();
-    for (const l of lines) {
-        const key = l.part ?? '其他';
-        map.set(key, [...(map.get(key) ?? []), l]);
-    }
-    const rank = (k) => {
-        const i = PART_ORDER.indexOf(k);
-        return i < 0 ? 99 : i;
-    };
-    return [...map.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
-}
-/** 记录里每一组的写法跟当时练的那一行完全一致：自重只写次数，递减组按档列 */
-function setText(unit, r) {
-    if (r.dropSteps?.length)
-        return r.dropSteps.map((s) => `${s.weightKg === null ? '自重' : loadLabel(unit, s.weightKg)}×${Math.max(1, s.sets)}组`).join(' ');
-    return `${unit === '无' ? '' : `${loadLabel(unit, r.weightKg)} `}× ${r.reps}${r.rpe ? ` RPE${r.rpe}` : ''}${r.fail ? ' 力竭' : ''}`;
+const partRank = (k) => {
+    const i = PART_ORDER.indexOf(k);
+    return i < 0 ? 99 : i;
+};
+/** 按组记的动作和手记的运动合成同一张清单：都是做完的运动，一律带对勾，不再分两栏 */
+function doneRows(entry) {
+    return [
+        ...entry.lines.map((l) => ({
+            key: `set:${l.name}`,
+            part: l.part ?? '其他',
+            left: `${l.sets} 组`,
+            sets: l.sets,
+            title: l.name,
+            meta: l.perSet.join(' / '),
+            best: l.best
+        })),
+        ...entry.activities.map((a) => ({
+            key: `act:${a.id}`,
+            part: a.part ?? '其他',
+            left: a.minutes ? `${a.minutes} 分钟` : '记录',
+            sets: 0,
+            title: a.name,
+            meta: actExtra(a)
+                .split(' · ')
+                .filter((x) => x && x !== a.part)
+                .join(' · '),
+            act: a
+        }))
+    ];
 }
 function DayDone({ entry, confirmId, onAskDelete, onDelete }) {
     const head = [
@@ -294,53 +287,43 @@ function DayDone({ entry, confirmId, onAskDelete, onDelete }) {
         entry.tonnage ? `${entry.tonnage.toLocaleString('zh-CN')} kg` : entry.setCount ? '没能折成 kg 的组' : '',
         entry.bestCount ? `${entry.bestCount} 个新高` : ''
     ].filter(Boolean);
+    const rows = doneRows(entry);
+    const grouped = new Map();
+    for (const r of rows)
+        grouped.set(r.part, [...(grouped.get(r.part) ?? []), r]);
+    const groups = [...grouped.entries()].sort((a, b) => partRank(a[0]) - partRank(b[0]));
     return (<div>
       <div className="lb-head-line">
         {head.length ? head.join(' · ') : entry.fromSheet ? '这天有表，但一组都没记' : '只记了运动，没在执行表上记组'}
       </div>
 
-      {groupLines(entry.lines).map(([part, items]) => (<div className="lb-part" key={part}>
-          <div className="lb-part-head">
-            <b>{part}</b>
-            <span className="faint small">
-              {items.length} 个动作 · {items.reduce((n, l) => n + l.sets, 0)} 组
-            </span>
-          </div>
-          {items.map((l, i) => (<div className="lb-ex" key={l.name}>
-              <div className="srow-head">
-                <span className="tag num">{i + 1}</span> {l.name}
-                {l.best ? <span className="tag accent">新高</span> : null}
+      {groups.map(([part, items]) => {
+            const sets = items.reduce((n, r) => n + r.sets, 0);
+            return (<div className="lb-part" key={part}>
+              <div className="lb-part-head">
+                <b>{part}</b>
+                <span className="faint small">
+                  {items.length} 个动作{sets ? ` · ${sets} 组` : ''}
+                </span>
               </div>
-              <div className="setlist">
-                {l.rows.map((r) => (<div className="setrow" key={r.idx}>
-                    <div className="setline">
-                      <div className="setbtn done lb-set">
-                        <span className="idx num">
-                          第 {r.idx + 1} 组{r.dropSteps?.length ? '｜递减' : ''}
-                        </span>
-                        <span className="want num">{setText(l.unit, r)}</span>
-                      </div>
-                    </div>
-                  </div>))}
-              </div>
-            </div>))}
-        </div>))}
-
-      {entry.activities.length ? (<div className="lb-part">
-          <div className="lb-part-head">
-            <b>其他运动</b>
-            <span className="faint small">{entry.activities.length} 条</span>
-          </div>
-          <div className="lb-lines">
-            {entry.activities.map((a) => (<div className="lb-line" key={a.id}>
-                <span className="lb-lname">{a.name}</span>
-                {a.minutes ? <span className="lb-lsets num">{a.minutes} 分钟</span> : null}
-                <span className="lb-ltop">{actExtra(a)}</span>
-                <button className={`lb-del${confirmId === a.id ? ' on' : ''}`} onClick={() => (confirmId === a.id ? onDelete(a.id) : onAskDelete(a.id))}>
-                  {confirmId === a.id ? '确认删' : '删'}
-                </button>
-              </div>))}
-          </div>
-        </div>) : null}
+              {items.map((r) => (<div className="lb-done" key={r.key}>
+                  <span className="lb-done-sets num">{r.left}</span>
+                  <span className="lb-done-badge" aria-hidden="true">
+                    {part.slice(0, 1)}
+                  </span>
+                  <span className="lb-done-body">
+                    <b>{r.title}</b>
+                    <span className="lb-done-meta num">{r.meta}</span>
+                  </span>
+                  {r.best ? <span className="tag accent">新高</span> : null}
+                  {r.act ? (<button className={`lb-del${confirmId === r.act.id ? ' on' : ''}`} onClick={() => (confirmId === r.act.id ? onDelete(r.act.id) : onAskDelete(r.act.id))}>
+                      {confirmId === r.act.id ? '确认删' : '删'}
+                    </button>) : null}
+                  <span className="lb-done-ok" aria-hidden="true">
+                    ✓
+                  </span>
+                </div>))}
+            </div>);
+        })}
     </div>);
 }

@@ -3,8 +3,47 @@ import { MEAL_LABELS } from '../types.js';
 import { addDaysIso, todayIso, uid } from '../engine/time.js';
 import { buildDays, dietScopeNote, dietTargets, macroLines, macroTargets, rangeDiet, verdict } from '../engine/diet.js';
 import { estimateMeal, NUTRIENTS, searchFoods } from '../engine/foodHints.js';
-import { mealPlans, SLOT_ORDER } from '../engine/mealPlan.js';
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
+/** 小环形缺口图：已吃 vs 目标 */
+function RingGauge({ value, target, label, unit }) {
+    const size = 88;
+    const stroke = 8;
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const ratio = target && target > 0 ? Math.min(1, Math.max(0, value / target)) : 0;
+    const offset = c * (1 - ratio);
+    const over = value > target && target > 0;
+    return (<div className="ring">
+      <svg width={size} height={size}>
+        <circle className="ring-bg" cx={size / 2} cy={size / 2} r={r} fill="none"/>
+        <circle className="ring-fg" cx={size / 2} cy={size / 2} r={r} fill="none" stroke={over ? 'var(--warn)' : 'var(--accent)'} strokeDasharray={c} strokeDashoffset={offset}/>
+      </svg>
+      <div className="ring-text">
+        <span className="num">
+          {value?.toLocaleString('zh-CN') ?? '—'}
+        </span>
+        <small>{unit ?? label}</small>
+      </div>
+    </div>);
+}
+/** 胶囊进度条 */
+function CapBar({ label, value, target, unit }) {
+    if (target == null)
+        return null;
+    const pct = value != null && target > 0 ? Math.min(100, Math.max(0, (value / target) * 100)) : 0;
+    const over = value != null && value > target;
+    const displayVal = value != null ? value.toLocaleString('zh-CN') : '—';
+    const displayTarget = target.toLocaleString('zh-CN');
+    return (<div className="cap-row">
+      <span className="cap-label">{label}</span>
+      <div className="cap-track">
+        <div className={`cap-fill${over ? ' over' : ''}`} style={{ width: `${pct}%` }}/>
+      </div>
+      <span className="cap-num">
+        {displayVal} / {displayTarget} {unit}
+      </span>
+    </div>);
+}
 export default function DietView({ profile, meals, onAdd, onRemove, onGoToday, onGoProfile }) {
     const today = todayIso();
     const targets = useMemo(() => dietTargets(profile), [profile]);
@@ -19,10 +58,33 @@ export default function DietView({ profile, meals, onAdd, onRemove, onGoToday, o
     const [adding, setAdding] = useState(false);
     const [openDay, setOpenDay] = useState('');
     const [confirmId, setConfirmId] = useState('');
+    // 今天已摄入
+    const todayKcal = todayEntry?.kcal ?? null;
+    const todayProtein = todayEntry?.proteinG ?? null;
+    const todayCarbs = todayEntry?.carbsG ?? null;
+    const todayFat = todayEntry?.fatG ?? null;
+    const todaySugar = todayEntry?.sugarG ?? null;
+    const todaySodium = todayEntry?.sodiumMg ?? null;
+    const proteinTarget = targets.protein ? Math.round((targets.protein[0] + targets.protein[1]) / 2) : null;
+    const carbsTarget = macros.carbs ? Math.round((macros.carbs[0] + macros.carbs[1]) / 2) : null;
+    const fatTarget = macros.fat ? Math.round((macros.fat[0] + macros.fat[1]) / 2) : null;
     return (<div>
       <div className="card">
         <h3>你的热量参考</h3>
-        {targets.target === null ? (<p className="muted small">{targets.basis}</p>) : (<div className="dt-target">
+        {targets.target === null ? (<>
+          <div className="sk" style={{ height: 34, width: 160 }}/>
+          <div className="sk" style={{ height: 14, width: 220, marginTop: 8 }}/>
+          <div className="sk" style={{ height: 14, width: 180, marginTop: 4 }}/>
+          <div className="dt-bubble" onClick={onGoProfile}>
+            <span className="dt-bubble-ico">✎</span>
+            <span className="dt-bubble-text">
+              <b>立即完善档案</b>
+              <small>{targets.basis ?? '填上身高体重、性别和年龄，算出你的专属热量参考。'}</small>
+            </span>
+            <span style={{ color: 'var(--accent-deep)', fontSize: 18 }}>›</span>
+          </div>
+        </>) : (<>
+          <div className="dt-target">
             <div className="dt-big num">
               {targets.target.toLocaleString('zh-CN')}
               <span className="dt-unit">kcal / 天</span>
@@ -33,16 +95,32 @@ export default function DietView({ profile, meals, onAdd, onRemove, onGoToday, o
               </div>
               {targets.protein ? <div className="small muted">蛋白质 {targets.protein[0]}–{targets.protein[1]} g</div> : null}
             </div>
-          </div>)}
-        <div className="dt-macros">
-          <span>碳水 <b className="num">{macros.carbs ? `${macros.carbs[0]}–${macros.carbs[1]} g` : '—'}</b></span>
-          <span>脂肪 <b className="num">{macros.fat ? `${macros.fat[0]}–${macros.fat[1]} g` : '—'}</b></span>
-          <span>糖 <b className="num">{macros.sugarMax !== null ? `≤ ${macros.sugarMax} g` : '—'}</b></span>
-          <span>钠 <b className="num">{macros.sodiumMax !== null ? `≤ ${macros.sodiumMax} mg` : '—'}</b></span>
-        </div>
+          </div>
+          <div className="ring-wrap">
+            <RingGauge value={todayKcal} target={targets.target} unit="kcal"/>
+            <div className="ring-info">
+              {todayKcal != null ? (<>
+                今天已吃 <b>{todayKcal.toLocaleString('zh-CN')}</b> kcal
+                <br/>
+                {todayKcal > targets.target
+                  ? `超了 ${(todayKcal - targets.target).toLocaleString('zh-CN')} kcal`
+                  : `还差 ${(targets.target - todayKcal).toLocaleString('zh-CN')} kcal`}
+              </>) : (<>
+                今天还没记热量，
+                <br/>
+                目标 <b>{targets.target.toLocaleString('zh-CN')}</b> kcal / 天
+              </>)}
+            </div>
+          </div>
+        </>)}
+        {targets.target !== null ? (<div style={{ marginTop: 8 }}>
+          <CapBar label="蛋白" value={todayProtein} target={proteinTarget} unit="g"/>
+          <CapBar label="碳水" value={todayCarbs} target={carbsTarget} unit="g"/>
+          <CapBar label="脂肪" value={todayFat} target={fatTarget} unit="g"/>
+          <CapBar label="糖" value={todaySugar} target={macros.sugarMax} unit="g"/>
+          <CapBar label="钠" value={todaySodium} target={macros.sodiumMax} unit="mg"/>
+        </div>) : null}
       </div>
-
-      <PlanCards targets={targets} onGoProfile={onGoProfile}/>
 
       <FoodLookup />
 
@@ -113,85 +191,6 @@ function dayHead(entry) {
         .filter(Boolean)
         .join(' · ');
 }
-function PlanCards({ targets, onGoProfile }) {
-    const plans = useMemo(() => mealPlans(targets), [targets]);
-    const [page, setPage] = useState(0);
-    const track = useRef(null);
-    const anchor = useRef(0);
-    if (!plans.length) {
-        return (<div className="card">
-        <h3>一天吃这么多</h3>
-        <div className="missing">填上身高体重、性别和年龄，这里就按你的档案算出一天吃多少克米饭、多少克面。</div>
-        <button className="btn primary" onClick={onGoProfile}>
-          去填档案
-        </button>
-      </div>);
-    }
-    const proteinTarget = targets.protein ? Math.round((targets.protein[0] + targets.protein[1]) / 2) : 0;
-    const go = (i) => {
-        anchor.current = i;
-        setPage(i);
-        const el = track.current;
-        if (el)
-            el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
-    };
-    return (<div className="card">
-      <h3>
-        一天吃这么多 · {targets.target?.toLocaleString('zh-CN')} kcal · 蛋白 {proteinTarget} g
-      </h3>
-      <div className="mp-track" ref={track} onScroll={(e) => {
-            // 一次手势只走一页：划一小下就翻两份是这卡带最烦的地方
-            const el = e.currentTarget;
-            const w = Math.max(1, el.clientWidth);
-            const i = Math.round(el.scrollLeft / w);
-            const lo = anchor.current - 1;
-            const hi = anchor.current + 1;
-            if (i < lo || i > hi) {
-                const to = i < lo ? lo : hi;
-                el.scrollLeft = to * w;
-                anchor.current = to;
-                setPage(to);
-                return;
-            }
-            if (i !== page) {
-                anchor.current = i;
-                setPage(i);
-            }
-        }}>
-        {plans.map((plan) => (<div className="mp-page" key={plan.key}>
-            <PlanCard plan={plan}/>
-          </div>))}
-      </div>
-      <div className="mp-dots">
-        {plans.map((plan, i) => (<button key={plan.key} className={i === page ? 'on' : ''} aria-label={plan.title} aria-pressed={i === page} onClick={() => go(i)}/>))}
-      </div>
-    </div>);
-}
-function PlanCard({ plan }) {
-    return (<div className="mp">
-      <div className="mp-head">
-        <b>{plan.title}</b>
-        <span className="num">
-          {plan.kcal.toLocaleString('zh-CN')} kcal · 蛋白 {plan.protein} · 碳水 {plan.carbs} · 脂肪 {plan.fat} g
-        </span>
-      </div>
-      {SLOT_ORDER.map((slot) => {
-            const rows = plan.items.filter((it) => it.slot === slot);
-            if (!rows.length)
-                return null;
-            return (<div className="mp-slot" key={slot}>
-            <span className="mp-tag">{MEAL_LABELS[slot]}</span>
-            <span className="mp-items">
-              {rows.map((it) => (<span className="mp-item" key={slot + it.name}>
-                  {it.name} <b className="num">{it.grams} g</b>
-                  {it.scale ? <em>{it.scale}</em> : null}
-                </span>))}
-            </span>
-            <span className="mp-kcal num">{Math.round(rows.reduce((n, it) => n + it.kcal, 0))}</span>
-          </div>);
-        })}
-    </div>);
-}
 function FoodLookup() {
     const [q, setQ] = useState('');
     const [all, setAll] = useState(false);
@@ -210,26 +209,21 @@ function FoodLookup() {
             {x.label}
           </button>))}
       </div>
-      <div className="ft-head">
-        <span>一份</span>
-        <span className="num">kcal</span>
-        <span className="num">
-          {meta.label} {meta.unit}
-        </span>
-      </div>
-      {shown.map((h) => {
+      <div className="ft-cards">
+        {shown.map((h) => {
             const range = h.nut[nut];
-            return (<div className="ft-row" key={h.label}>
-            <span className="ft-l">
-              <b>{h.label}</b>
-              <em>{h.portion}</em>
-            </span>
-            <span className="num">
-              {h.low}–{h.high}
-            </span>
-            <span className="num">{range ? `${range[0]}–${range[1]}` : '—'}</span>
-          </div>);
+            return (<div className="ft-card" key={h.label}>
+              <div className="ft-card-l">
+                <b>{h.label}</b>
+                <em>{h.portion}</em>
+              </div>
+              <div className="ft-card-r">
+                <span className="ft-card-kcal num">{h.low}–{h.high}<small>kcal</small></span>
+                <span className="ft-card-nut num">{range ? `${range[0]}–${range[1]}` : '—'}<small>{meta.label}</small></span>
+              </div>
+            </div>);
         })}
+      </div>
       {!list.length ? <div className="faint small">表里没有「{q}」这一条。</div> : null}
       {!q && list.length > shown.length ? (<button className="btn ghost" onClick={() => setAll(true)}>
           显示全部 {list.length} 条

@@ -231,8 +231,8 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
             return (<div className="card tight" key={slot.id}>
               <div className="srow-head">
                 <span className="tag num">{order + 1}</span> {slot.name}
-                <button className="skip-link" onClick={() => onSkip(slot.id)}>
-                  今天不练
+                <button className="skip-link" onClick={() => onSkip(slot.id)} aria-label="今天不练">
+                  ✕
                 </button>
               </div>
               {!isLift ? (<>

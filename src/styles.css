@@ -2,9 +2,9 @@
   --bg: #ffffff;
   --bg-raise: #ffffff;
   --bg-card: #ffffff;
-  --bg-sunken: #f5f6fa;
-  --line: #e7eaf1;
-  --line-strong: #d7dbe4;
+  --bg-sunken: #f4f5f9;
+  --line: #eceff4;
+  --line-strong: #dfe3ec;
   --text: #16181d;
   --text-dim: #5c626d;
   --text-faint: #8f95a1;
@@ -23,10 +23,12 @@
   --danger-soft: #fbecea;
   --danger-line: #efc3bd;
   --ok: #2f8f5b;
-  --radius: 20px;
-  /* 底栏实测高度（不含 safe-area）：聊天页的输入条要停在它上面 */
+  --ok-soft: #e7f5ee;
+  --radius: 14px;
   --tabbar-h: 58px;
-  --shadow: 0 1px 2px rgba(22, 24, 29, 0.04), 0 10px 26px rgba(22, 24, 29, 0.07);
+  --shadow-sm: 0 1px 2px rgba(22, 24, 29, 0.04), 0 2px 8px rgba(22, 24, 29, 0.04);
+  --shadow: 0 1px 2px rgba(22, 24, 29, 0.04), 0 10px 26px rgba(22, 24, 29, 0.06);
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 * {
@@ -370,6 +372,15 @@ textarea {
   font-size: 14.5px;
   cursor: pointer;
   min-height: 42px;
+  transition: background 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease);
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--accent-line);
+}
+
+.chip:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .chip[aria-pressed='true'],
@@ -460,6 +471,15 @@ textarea {
   letter-spacing: -0.1px;
   cursor: pointer;
   min-height: 48px;
+  transition: background 180ms var(--ease), border-color 180ms var(--ease), color 180ms var(--ease), transform 140ms var(--ease), box-shadow 180ms var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent-line);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn.primary {
@@ -1353,7 +1373,9 @@ textarea {
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  min-height: 128px;
+  aspect-ratio: 16 / 9;
+  min-height: 110px;
+  max-height: 180px;
   padding: 13px 15px;
   margin-bottom: 8px;
   border: 0;
@@ -1362,6 +1384,12 @@ textarea {
   color: #fff;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease);
+}
+
+.sec-photo:hover {
+  transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
 
@@ -1400,6 +1428,42 @@ textarea {
 
 .sec-photo .mv-caret {
   color: rgba(255, 255, 255, 0.74);
+}
+
+/* ---------- 动作页分类横滑 Tab ---------- */
+.mv-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: -4px 0 14px;
+  padding: 2px 0 8px;
+}
+
+.mv-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mv-tab {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-raise);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease);
+}
+
+.mv-tab.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-deep);
+  font-weight: 660;
 }
 
 /* 一行一个动作：名字 + 剂量概览 + 爱心 + 加入今天 */
@@ -1641,6 +1705,36 @@ textarea {
 }
 
 .lb-del.on {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  font-weight: 660;
+}
+
+.lb-day-del {
+  appearance: none;
+  flex: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lb-day-del:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.lb-day-del.on {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: var(--danger);
@@ -1973,6 +2067,79 @@ textarea {
   font-size: 11.5px;
 }
 
+/* 食物卡片网格 */
+.ft-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ft-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raise);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease), transform 140ms var(--ease);
+}
+
+.ft-card:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.ft-card-l {
+  min-width: 0;
+  flex: 1;
+}
+
+.ft-card-l b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 660;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ft-card-l em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.ft-card-r {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+}
+
+.ft-card-kcal,
+.ft-card-nut {
+  font-size: 12.5px;
+  font-weight: 660;
+  color: var(--accent-deep);
+  line-height: 1.1;
+}
+
+.ft-card-kcal small,
+.ft-card-nut small {
+  font-size: 9.5px;
+  color: var(--text-faint);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
 /* ---------- 周框架：自己点哪天练、每天练什么部位 ---------- */
 .arearow {
   border-top: 1px solid var(--line);
@@ -2172,17 +2339,71 @@ textarea {
   letter-spacing: 0.08em;
 }
 
-/* 记录里的动作块跟练的时候同一个写法：标题行 + 每组的 setline */
-.lb-ex {
-  margin-top: 8px;
+/* 记录里的动作和手记的运动用同一种行：组数/时长 + 部位圆标 + 名称 + 明细 + 对勾 */
+.lb-done {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.lb-ex .setlist {
-  margin-top: 4px;
+.lb-done:last-child {
+  border-bottom: 0;
 }
 
-.lb-set {
-  cursor: default;
+.lb-done-sets {
+  flex: none;
+  width: 42px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.lb-done-badge {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 660;
+}
+
+.lb-done-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lb-done-body b {
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.lb-done-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+.lb-done-ok {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ok);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
 }
 
 /* ---------- 设置：模块按钮列表 ---------- */
@@ -2978,20 +3199,44 @@ textarea {
 
 .pb-cell.today {
   border-color: var(--accent-line);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 1px 2px rgba(22, 24, 29, 0.04);
 }
 
 .pb-cell.today .pb-num {
   color: var(--accent-deep);
 }
 
+.pb-cell.today .pb-role {
+  color: var(--accent-deep);
+  font-weight: 660;
+}
+
 .pb-cell.sel {
-  background: var(--accent-soft);
+  background: var(--accent);
   border-color: var(--accent);
+  color: #fff;
+}
+
+.pb-cell.sel .pb-wd {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.pb-cell.sel .pb-num {
+  color: #fff;
+}
+
+.pb-cell.sel .pb-role {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .pb-cell.rest {
   background: var(--bg-sunken);
-  opacity: 0.62;
+  opacity: 1;
+  border-color: var(--line);
+}
+
+.pb-cell.rest .pb-role {
+  color: var(--text-faint);
 }
 
 .pb-cell.over {
@@ -3104,6 +3349,23 @@ textarea {
   background: none;
 }
 
+.pb-cardio {
+  background: var(--bg-sunken);
+  outline: 2px dashed var(--accent-line);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.pb-cardio td {
+  border-top: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.pb-rest-day td {
+  color: var(--text-faint);
+}
+
 .pb-i {
   width: 30px;
   font-size: 12px;
@@ -3136,7 +3398,22 @@ textarea {
 }
 
 .pb-bar {
+  position: sticky;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  z-index: 10;
   margin-top: 12px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  margin-left: -8px;
+  margin-right: -8px;
+}
+
+.pb-bar .btn.primary {
+  box-shadow: 0 6px 20px rgba(207, 58, 78, 0.32);
 }
 
 .pb-hint {
@@ -3514,4 +3791,179 @@ body::after {
     animation: none;
     transform: none;
   }
+}
+
+/* ========= 全局微交互 & 骨架屏 ========= */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+.sk {
+  background: var(--bg-sunken);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+/* ========= 环形进度图（饮食页热量缺口） ========= */
+.ring-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.ring {
+  flex: none;
+  position: relative;
+  width: 88px;
+  height: 88px;
+}
+
+.ring svg {
+  transform: rotate(-90deg);
+}
+
+.ring .ring-bg {
+  stroke: var(--bg-sunken);
+  stroke-width: 8;
+}
+
+.ring .ring-fg {
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms var(--ease);
+}
+
+.ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-text .num {
+  font-size: 16px;
+  font-weight: 720;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.ring-text small {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.ring-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.ring-info b {
+  color: var(--accent-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========= 胶囊进度条（饮食页每项营养素） ========= */
+.cap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.cap-row .cap-label {
+  flex: none;
+  width: 44px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.cap-row .cap-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cap-row .cap-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 500ms var(--ease);
+  min-width: 2px;
+}
+
+.cap-row .cap-fill.over {
+  background: var(--warn);
+}
+
+.cap-row .cap-num {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 72px;
+}
+
+/* ========= 完善档案引导气泡 ========= */
+.dt-bubble {
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--accent-soft), #fff5f7);
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.dt-bubble:hover {
+  box-shadow: 0 4px 12px rgba(232, 72, 92, 0.14);
+  transform: translateY(-1px);
+}
+
+.dt-bubble:active {
+  transform: scale(0.98);
+}
+
+.dt-bubble .dt-bubble-ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex: none;
+}
+
+.dt-bubble .dt-bubble-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-bubble .dt-bubble-text b {
+  display: block;
+  color: var(--accent-deep);
+  font-size: 13.5px;
+}
+
+.dt-bubble .dt-bubble-text small {
+  color: var(--text-faint);
+  font-size: 12px;
 }

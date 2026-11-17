@@ -9,7 +9,7 @@ import { useVelocityDrag } from './velocityDrag.js';
 const md = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`;
 const setsOf = (day) => day.exerciseIds.reduce((s, id) => s + (byId(id)?.sets ?? 0), 0);
 
-export default function PlanBoard({ weekPlan, profile, favorites, today, onMoveDay, onEditDay, onStart }) {
+export default function PlanBoard({ weekPlan, framework, profile, favorites, today, onMoveDay, onEditDay, onStart, onGenerateFramework }) {
     const [edit, setEdit] = useState(false);
     const [sel, setSel] = useState(today);
     const [pick, setPick] = useState(null);
@@ -25,8 +25,24 @@ export default function PlanBoard({ weekPlan, profile, favorites, today, onMoveD
         targetSelector: '.pb-cell',
         cardSelector: '.pb-card'
     });
-    if (!weekPlan)
-        return null;
+    if (!weekPlan) {
+        return (<div className="card">
+            <h3>本周计划</h3>
+            {framework ? (<div className="faint small" style={{ marginBottom: 8 }}>
+                周框架在（{framework.days.length} 天 · {framework.startDate} 起），但本周的具体日期表还没生成。
+            </div>) : (<div className="faint small" style={{ marginBottom: 8 }}>
+                还没有周框架和周计划。先生成一份，再调整哪天干什么。
+            </div>)}
+            <div className="btnbar">
+                {framework ? (<button className="btn primary" onClick={onStart}>
+                    直接开始今天的训练
+                </button>) : null}
+                {onGenerateFramework ? (<button className="btn ghost" onClick={onGenerateFramework}>
+                    生成周计划
+                </button>) : null}
+            </div>
+          </div>);
+    }
     const sessions = dates.filter((d) => weekPlan.days[d]);
     const openSwap = (index) => setPick({ mode: 'swap', index });
     const togglePick = (id) => {
@@ -77,7 +93,7 @@ export default function PlanBoard({ weekPlan, profile, favorites, today, onMoveD
                     <td className="num pb-dose">{ex.sets}×{ex.reps}</td>
                   </tr>);
             }) : null}
-            {day && day.cardioMin > 0 ? (<tr className="pb-tr static">
+            {day && day.cardioMin > 0 ? (<tr className="pb-tr static pb-cardio">
                 <td className="num pb-i">＋</td>
                 <td className="pb-name"><b>有氧</b><span>能说话但不能唱歌的强度</span></td>
                 <td className="num pb-dose">{day.cardioMin} 分</td>
@@ -87,7 +103,7 @@ export default function PlanBoard({ weekPlan, profile, favorites, today, onMoveD
                 <td className="pb-name"><b>还没排动作</b><span>下面「＋加动作」挑几个</span></td>
                 <td className="num pb-dose"/>
               </tr>) : null}
-            {!day ? (<tr className="pb-tr static">
+            {!day ? (<tr className="pb-tr static pb-rest-day">
                 <td className="num pb-i">–</td>
                 <td className="pb-name"><b>这天不排训练</b><span>睡够比练够重要</span></td>
                 <td className="num pb-dose"/>

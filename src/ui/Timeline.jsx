@@ -48,8 +48,8 @@ export function SlotRow({ slot, order, dragging, dropTarget, dy, onOpen, onToggl
           <button className="skip-link" onClick={(e) => {
             e.stopPropagation();
             onToggleSkip(slot.id);
-        }}>
-            今天不练
+        }} aria-label="今天不练">
+            ✕
           </button>
           <span className="more">详解 ›</span>
         </div>

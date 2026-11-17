@@ -492,31 +492,7 @@ function TrainView({ profile, framework, sheet, weekPlan, favorites, onGenerate,
     };
     return (<div>
       <div className="block-head">本周计划</div>
-      <PlanBoard weekPlan={weekPlan} profile={profile} favorites={favorites} today={todayIso()} onMoveDay={onMoveDay} onEditDay={onEditDay} onStart={onStart}/>
-
-      {!framework && profile.goal ? (<div className="card">
-          <h3>周框架不在了</h3>
-          <div className="btnbar">
-            <button className="btn primary" onClick={onRegenerateFramework}>
-              按现在的档案生成
-            </button>
-            <button className="btn ghost" onClick={onGoProfile}>
-              先改档案
-            </button>
-          </div>
-        </div>) : null}
-
-      <div className="block-head">直接开始</div>
-      <div className="hero-card right" style={{ ['--img']: "url('/direct.jpg')", ['--pos']: 'center 26%' }}>
-        <div className="hero-tag">{tag}</div>
-        <h2 className="hero-title">{direct.title}</h2>
-        <div className="hero-meta">
-          {direct.meta.map((x) => (<span key={x}>{x}</span>))}
-        </div>
-        <button className="hero-btn" onClick={direct.on}>
-          {direct.cta}
-        </button>
-      </div>
+      <PlanBoard weekPlan={weekPlan} framework={framework} profile={profile} favorites={favorites} today={todayIso()} onMoveDay={onMoveDay} onEditDay={onEditDay} onStart={onStart} onGenerateFramework={onRegenerateFramework}/>
 
       {sheet ? (<div>
           <button className="fold-head" onClick={() => setContentOpen(!contentOpen)} aria-expanded={contentOpen}>

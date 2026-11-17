@@ -26,8 +26,14 @@ const SECTION_PHOTO = {
 export default function ExerciseView({ profile, favorites, picked, logs, date, onToggleFavorite, onTogglePick, pickFor, recordPicks, onToggleRecordPick, onFinishRecordPick }) {
     const [query, setQuery] = useState('');
     const [section, setSection] = useState('');
+    const [tab, setTab] = useState('all');
     const [openId, setOpenId] = useState(null);
     const home = isHomeMode(profile);
+    const AREA_TABS = [
+        { key: 'all', label: '全部' },
+        { key: 'fav', label: '我的收藏' },
+        ...BROWSE_AREAS.map((a) => ({ key: a.key, label: a.title.replace('训练', '') }))
+    ];
     const groups = useMemo(() => {
         const q = query.trim();
         // 中文按整串包含来搜最直观，拆成单字会把所有动作都捞出来
@@ -87,24 +93,29 @@ export default function ExerciseView({ profile, favorites, picked, logs, date, o
         </button>
       </div>);
     };
+    // sec-n 数字带后缀
     const sectionHead = (key, title, count, hint) => {
         const open = searching || section === key;
         const toggle = () => setSection(section === key && !searching ? '' : key);
         const photo = SECTION_PHOTO[key];
+        const countLabel = `${count}个动作`;
         if (photo) {
             return (<button className="sec-photo" style={{ ['--img']: `url('${photo}')` }} aria-expanded={open} onClick={toggle}>
           <b>{title}</b>
-          <span className="sec-n num">{count}</span>
+          <span className="sec-n num">{countLabel}</span>
           <span className="mv-caret">{open ? '▾' : '▸'}</span>
         </button>);
         }
         return (<button className="mv-head" aria-expanded={open} onClick={toggle}>
         <span>{title}</span>
-        <span className="mv-count num">{count}</span>
+        <span className="mv-count num">{countLabel}</span>
         <span className="mv-hint">{hint}</span>
         <span className="mv-caret">{open ? '▾' : '▸'}</span>
       </button>);
     };
+    // tab 过滤只在非搜索时生效
+    const tabFav = tab === 'fav';
+    const tabArea = tab !== 'all' && tab !== 'fav' ? tab : null;
     return (<div>
       <div className="card tight">
         {pickFor ? (<div className="picked-row">
@@ -118,15 +129,26 @@ export default function ExerciseView({ profile, favorites, picked, logs, date, o
         </div>
       </div>
 
-      <div className="sec">
-        {sectionHead('fav', '喜欢动作', groups.fav.length, favorites.length ? '' : '还没收藏')}
-        {searching || section === 'fav' ? (favorites.length ? groups.fav.map(renderRow) : null) : null}
-      </div>
+      {!searching ? (<div className="mv-tabs" role="tablist" aria-label="动作分类">
+          {AREA_TABS.map((t) => (<button key={t.key} className={`mv-tab${tab === t.key ? ' on' : ''}`} role="tab" aria-pressed={tab === t.key} onClick={() => {
+                  setTab(t.key);
+                  setSection('');
+              }}>
+              {t.label}
+            </button>))}
+        </div>) : null}
 
-      {groups.byArea.map((g) => (<div className="sec" key={g.key}>
-          {sectionHead(g.key, g.title, g.list.length, '')}
-          {searching || section === g.key ? g.list.map(renderRow) : null}
-        </div>))}
+      {(searching || tab === 'all' || tabFav) ? (<div className="sec">
+        {sectionHead('fav', '我的收藏', groups.fav.length, favorites.length ? '' : '还没收藏')}
+        {searching || tabFav || section === 'fav' ? (favorites.length ? groups.fav.map(renderRow) : null) : null}
+      </div>) : null}
+
+      {groups.byArea
+        .filter((g) => searching || !tabArea || g.key === tabArea)
+        .map((g) => (<div className="sec" key={g.key}>
+            {sectionHead(g.key, g.title, g.list.length, '')}
+            {searching || tabArea || section === g.key ? g.list.map(renderRow) : null}
+          </div>))}
 
       {/* 让最后一条不被底部导航压住 */}
       <div style={{ height: 70 }}/>

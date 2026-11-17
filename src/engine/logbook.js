@@ -21,6 +21,25 @@ function setTonnage(l, ex) {
         return 0;
     return l.weightKg * perRep;
 }
+/** 一行记下来的数：递减组写成「7kg×2组 5kg×1组」，普通组还是「重量×次数」 */
+function setLabel(l, unit) {
+    if (l.dropSteps?.length) {
+        return l.dropSteps.map((s) => `${s.weightKg === null ? '自重' : fmtLoad(s.weightKg, unit)}×${Math.max(1, s.sets)}组`).join(' ');
+    }
+    return `${l.weightKg === null ? '自重' : fmtLoad(l.weightKg, unit)}×${l.reps}`;
+}
+/** 手记的那条运动归到哪个部位：选了动作就跟动作走，否则看他点过的部位，再不行才按有氧/其他 */
+function actPart(a) {
+    for (const id of a.exIds) {
+        const ex = byId(id);
+        if (ex)
+            return partOf(ex);
+    }
+    const area = a.areas.find((x) => AREA_OPTIONS.includes(x));
+    if (area)
+        return area;
+    return a.kind === 'cardio' || a.kind === 'walk' ? '有氧' : '其他';
+}
 /** 格子里写不下全称，也没必要：稳定肌和心肺每天都被大项带到，列出来反而看不出这天真正练的是什么 */
 const PART_SHORT = {
     股四头: '大腿',
@@ -139,14 +158,7 @@ export function buildEntries(sheets, logs, acts) {
                 name: `${ex?.name ?? exId}${lane === 'ramp' ? ' · 递增热身' : ''}`,
                 unit,
                 sets: mine.length,
-                rows: mine.map((l) => ({
-                    idx: l.setIdx,
-                    weightKg: l.weightKg,
-                    reps: l.reps,
-                    rpe: l.rpe ?? null,
-                    fail: !!l.toFailure,
-                    dropSteps: l.dropSteps ?? null
-                })),
+                perSet: mine.map((l) => setLabel(l, unit)),
                 top: top ? `${top.weightKg === null ? '自重' : fmtLoad(top.weightKg, unit)} × ${top.reps}` : '—',
                 best: lane === 'work' && isNewBest(logs, exId, date)
             });
@@ -173,7 +185,7 @@ export function buildEntries(sheets, logs, acts) {
             minutes,
             cardioMin: dayActs.reduce((n, a) => n + (isAerobic(a) ? a.minutes : 0), 0),
             plannedCardioMin: Math.round(doing.filter((s) => s.kind === 'cardio').reduce((n, s) => n + s.durationSec, 0) / 60),
-            activities: dayActs,
+            activities: dayActs.map((a) => ({ ...a, part: actPart(a) })),
             bestCount: lines.filter((l) => l.best).length,
             fromSheet: !!sheet
         });

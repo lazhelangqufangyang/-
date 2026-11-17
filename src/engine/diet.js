@@ -13,13 +13,20 @@ export function dietTargets(p) {
     const advice = baselineAdvice(p);
     const floor = advice.floor;
     if (!advice.tdee) {
+        const missing = [];
+        if (p.sex == null) missing.push('性别');
+        if (p.age == null) missing.push('年龄');
+        if (p.heightCm == null) missing.push('身高');
+        if (p.weightKg == null) missing.push('体重');
         return {
             bmr: null,
             maintain: null,
             target: null,
             floor,
             protein: null,
-            basis: '在档案填写性别、年龄、身高和体重，即可算出参考热量'
+            basis: missing.length
+                ? `档案里还缺：${missing.join('、')} — 这四项都填上才能算出你的参考热量`
+                : '档案齐了但算不出热量，请去档案页检查'
         };
     }
     const [low, high] = advice.tdee.range;
