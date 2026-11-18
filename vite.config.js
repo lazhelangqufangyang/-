@@ -22,10 +22,13 @@ const landingIndex = {
 export default defineConfig({
   plugins: [landingIndex, tailwindcss(), react()],
   server: {
-    // 前端默认打同源的 /api：开发时由这里转给本地后端
+    // 本地开发统一走同源 /api：由 Vite 代理到真实后端，避免跨域和 HTML fallback。
     proxy: {
-      '/api': { target: `http://127.0.0.1:${process.env.FITPLAN_API_PORT || 8787}`, changeOrigin: true }
-    }
+      '/api': {
+        target: process.env.FITPLAN_API_URL || `http://localhost:${process.env.FITPLAN_API_PORT || 8080}`,
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',

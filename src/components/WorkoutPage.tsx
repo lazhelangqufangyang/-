@@ -8,13 +8,16 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  WifiOff,
 } from 'lucide-react';
-import { apiRequest, ApiError, getErrorMessage } from '../api/client';
+import { apiRequest, ApiError, getErrorMessage, isBackendUnavailable } from '../api/client';
 
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const DEFAULT_SET_COUNT = 4;
+/** 后端未启动时，开发环境可把 VITE_USE_MOCK 改成 true，使用本地降级数据调 UI。 */
+const USE_LOCAL_FALLBACK = import.meta.env.VITE_USE_MOCK === 'true';
 
 const dateKey = () => {
   const d = new Date();
@@ -88,9 +91,74 @@ const makeSet = (
   id = uid('set'),
 ): WorkoutSet => ({ id, weight, reps, rpe, done });
 
-function normalizeWorkout(payload: ApiWorkout | { workout: ApiWorkout }): Workout {
-  const raw = 'workout' in payload ? payload.workout : payload;
-  if (!raw?.id || !Array.isArray(raw.exercises)) {
+const LOCAL_FALLBACK_WORKOUT: Workout = {
+  id: 'local-fallback',
+  name: '本地演示训练',
+  exercises: [
+    {
+      id: 'local-lat-pulldown',
+      name: '高位下拉',
+      part: '背',
+      restSec: 90,
+      sets: [
+        makeSet(37.5, 10, 7),
+        makeSet(37.5, 10, 7.5),
+        makeSet(37.5, 10, 7.5),
+        makeSet(37.5, 10, 8),
+      ],
+    },
+    {
+      id: 'local-bench-press',
+      name: '杠铃卧推',
+      part: '胸',
+      restSec: 120,
+      sets: [
+        makeSet(52.5, 8, 7.5),
+        makeSet(52.5, 8, 8),
+        makeSet(52.5, 8, 8),
+        makeSet(52.5, 8, 8.5),
+      ],
+    },
+  ],
+};
+
+function WorkoutSkeleton() {
+  return (
+    <div className="mt-6 space-y-3" aria-hidden="true">
+      {[0, 1].map((card) => (
+        <div key={card} className="animate-pulse rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="h-8 w-8 rounded-full bg-gray-100" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-28 rounded bg-gray-100" />
+              <div className="h-3 w-44 rounded bg-gray-100" />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {[0, 1, 2, 3].map((row) => (
+              <div key={row} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-3">
+                <div className="h-6 w-6 rounded-full bg-gray-100" />
+                <div className="h-3 flex-1 rounded bg-gray-100" />
+                <div className="h-6 w-14 rounded-full bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function normalizeWorkout(payload: unknown): Workout {
+  // 防止后端/代理返回 HTML 字符串时，对字符串使用 in 运算符。
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('训练计划数据格式不正确');
+  }
+
+  const data = payload as ApiWorkout | { workout: ApiWorkout };
+  const raw = 'workout' in data ? data.workout : data;
+
+  if (!raw || typeof raw !== 'object' || !raw.id || !Array.isArray(raw.exercises)) {
     throw new Error('训练计划数据格式不正确');
   }
 
@@ -288,6 +356,7 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
   const [openRpe, setOpenRpe] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [usingFallback, setUsingFallback] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -296,6 +365,7 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
     const controller = new AbortController();
     setLoading(true);
     setLoadError('');
+    setUsingFallback(false);
     setWorkout(null);
 
     apiRequest<ApiWorkout | { workout: ApiWorkout } | undefined>('/users/me/workouts/active', {
@@ -303,6 +373,7 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
     })
       .then((data) => {
         setWorkout(data ? normalizeWorkout(data) : null);
+        setUsingFallback(false);
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
@@ -310,7 +381,19 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
           setWorkout(null);
           return;
         }
-        setLoadError(getErrorMessage(error));
+
+        // 开发降级开关：后端未启动时仍可继续调动作列表 UI。
+        if (USE_LOCAL_FALLBACK) {
+          setWorkout(LOCAL_FALLBACK_WORKOUT);
+          setUsingFallback(true);
+          return;
+        }
+
+        setLoadError(
+          isBackendUnavailable(error)
+            ? '网络异常，请检查后端是否启动'
+            : getErrorMessage(error) || '训练计划加载失败',
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -392,7 +475,10 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
           body: JSON.stringify(payload),
         },
       );
-      const saved = savedPayload && 'record' in savedPayload ? savedPayload.record : savedPayload;
+      const saved =
+        savedPayload && typeof savedPayload === 'object' && 'record' in savedPayload
+          ? savedPayload.record
+          : savedPayload;
 
       onCompleteTraining?.({
         ...payload,
@@ -431,19 +517,28 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
             </div>
           </header>
 
-          {loading && (
-            <div className="mt-6 space-y-3">
-              {[1, 2].map((item) => <div key={item} className="h-48 animate-pulse rounded-2xl border border-gray-100 bg-white" />)}
-            </div>
-          )}
+          {loading && <WorkoutSkeleton />}
 
           {!loading && loadError && (
-            <div className="mt-6 rounded-2xl border border-red-100 bg-white p-6 text-center">
-              <p className="text-sm font-bold text-gray-800">训练计划加载失败</p>
-              <p className="mt-1 text-xs text-gray-500">{loadError}</p>
-              <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#E63946] px-4 py-2 text-xs font-bold text-white">
-                <RefreshCw size={13} />重新加载
-              </button>
+            <>
+              <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 text-center shadow-sm">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+                  <WifiOff size={18} />
+                </div>
+                <p className="mt-3 text-sm font-bold text-gray-800">无法加载训练计划</p>
+                <p className="mt-1 text-xs text-gray-500">{loadError}</p>
+                <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#E63946] px-4 py-2 text-xs font-bold text-white active:scale-95">
+                  <RefreshCw size={13} />重新加载
+                </button>
+              </div>
+              <WorkoutSkeleton />
+            </>
+          )}
+
+          {!loading && !loadError && usingFallback && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-medium text-amber-700">
+              <WifiOff size={12} />
+              本地演示数据 · 后端未连接
             </div>
           )}
 

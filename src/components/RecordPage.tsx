@@ -9,6 +9,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  WifiOff,
   X,
 } from 'lucide-react';
 import { apiRequest, getErrorMessage } from '../api/client';
@@ -63,30 +64,43 @@ const ACTION_LIBRARY = [
   { id: 'squat', name: '杠铃深蹲', part: '腿', core: '4组 × 8' },
 ];
 
-function normalizeAction(action: ApiAction): Action {
+function normalizeAction(action: unknown): Action {
+  if (!action || typeof action !== 'object') {
+    throw new Error('训练记录动作格式不正确');
+  }
+  const item = action as ApiAction;
   return {
-    id: action.id ? String(action.id) : uid('action'),
-    part: action.part ?? '其他',
-    title: action.title ?? action.name ?? '训练动作',
+    id: item.id ? String(item.id) : uid('action'),
+    part: item.part ?? '其他',
+    title: item.title ?? item.name ?? '训练动作',
     core:
-      action.core ??
-      (action.sets !== undefined
-        ? `${action.sets}组${action.reps ? ` × ${action.reps}` : ''}`
+      item.core ??
+      (item.sets !== undefined
+        ? `${item.sets}组${item.reps ? ` × ${item.reps}` : ''}`
         : '记录'),
   };
 }
 
-function normalizeRecord(record: ApiRecord): RecordEntry {
+function normalizeRecord(record: unknown): RecordEntry {
+  if (!record || typeof record !== 'object') {
+    throw new Error('训练记录数据格式不正确');
+  }
+  const item = record as ApiRecord;
   return {
-    id: record.id ? String(record.id) : undefined,
-    date: record.date,
-    tag: record.tag ?? '仅记录',
-    actions: (record.actions ?? []).map(normalizeAction),
+    id: item.id ? String(item.id) : undefined,
+    date: item.date,
+    tag: item.tag ?? '仅记录',
+    actions: (item.actions ?? []).map(normalizeAction),
   };
 }
 
-function normalizeRecordList(payload: ApiRecord[] | { records: ApiRecord[] }): RecordEntry[] {
-  const list = Array.isArray(payload) ? payload : payload.records;
+function normalizeRecordList(payload: unknown): RecordEntry[] {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('训练记录数据格式不正确');
+  }
+  const list = Array.isArray(payload)
+    ? payload
+    : (payload as { records?: unknown }).records;
   if (!Array.isArray(list)) throw new Error('训练记录数据格式不正确');
   return list.map(normalizeRecord);
 }
@@ -381,7 +395,10 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
           actions: record.actions,
         }),
       });
-      const rawRecord = saved && 'record' in saved ? saved.record : saved;
+      const rawRecord =
+        saved && typeof saved === 'object' && 'record' in saved
+          ? saved.record
+          : saved;
       const nextRecord = normalizeRecord(rawRecord ?? record);
       setRecords((current) => ({ ...current, [nextRecord.date]: nextRecord }));
       setSelectedDate(nextRecord.date);
@@ -428,9 +445,13 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
             </div>
 
             {loadError && (
-              <div className="mt-3 flex items-center justify-between rounded-xl bg-red-50 px-3 py-2">
-                <span className="text-[11px] font-medium text-red-500">{loadError}</span>
-                <button type="button" onClick={() => setRefreshKey((key) => key + 1)} className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#E63946]">
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-gray-50 p-3">
+                <WifiOff size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold text-gray-700">网络异常</p>
+                  <p className="mt-0.5 text-[10px] text-gray-500">{loadError}</p>
+                </div>
+                <button type="button" onClick={() => setRefreshKey((key) => key + 1)} className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-[#E63946]">
                   <RefreshCw size={12} />重试
                 </button>
               </div>
@@ -498,9 +519,10 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
               {selectedRecord && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[9px] font-bold text-gray-500">{selectedRecord.tag ?? '仅记录'}</span>}
             </div>
 
-            {loading ? (
+            {loading || loadError ? (
               <div className="mt-4 space-y-2">
                 <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-16 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-16 animate-pulse rounded-xl bg-gray-100" />
               </div>
             ) : selectedRecord ? (

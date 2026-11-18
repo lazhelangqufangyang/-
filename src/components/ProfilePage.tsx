@@ -16,8 +16,9 @@ import {
   Sunrise,
   Target,
   Trophy,
+  WifiOff,
 } from 'lucide-react';
-import { apiRequest, isUnauthorized } from '../api/client';
+import { apiRequest, isBackendUnavailable, isUnauthorized } from '../api/client';
 import { logOut, setSessionToken } from '../api/account.js';
 import BottomSheet from './profile/BottomSheet';
 import LogoutConfirmDialog from './profile/LogoutConfirmDialog';
@@ -36,7 +37,7 @@ import type {
   SettingsModule,
   SyncPhase,
   UserProfile,
-} from './profileTypes';
+} from './profile/profileTypes';
 
 type ProfilePageProps = {
   isLoggedIn?: boolean;
@@ -65,8 +66,12 @@ const BADGE_CATALOG = [
   { id: 'morning', name: '晨练先锋', desc: '在清晨完成训练', icon: Sunrise, colors: ['#e0f2fe', '#7dd3fc'], ink: '#0369a1' },
 ];
 
-function normalizeProfile(payload: UserProfile | { profile: UserProfile }): UserProfile {
-  const raw = 'profile' in payload ? payload.profile : payload;
+function normalizeProfile(payload: unknown): UserProfile {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('用户档案数据格式不正确');
+  }
+  const data = payload as UserProfile | { profile: UserProfile };
+  const raw = 'profile' in data ? data.profile : data;
   if (!raw || typeof raw !== 'object') throw new Error('用户档案数据格式不正确');
   return {
     ...raw,
@@ -75,8 +80,12 @@ function normalizeProfile(payload: UserProfile | { profile: UserProfile }): User
   };
 }
 
-function normalizeBadges(payload: BadgesPayload): EarnedBadge[] {
-  const list = Array.isArray(payload) ? payload : payload.badges;
+function normalizeBadges(payload: unknown): EarnedBadge[] {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('徽章数据格式不正确');
+  }
+  const data = payload as BadgesPayload;
+  const list = Array.isArray(data) ? data : data.badges;
   if (!Array.isArray(list)) throw new Error('徽章数据格式不正确');
   return list
     .map((item) => (typeof item === 'string' ? { name: item } : { id: item.id, name: item.name, awardedAt: item.awardedAt }))
@@ -208,6 +217,7 @@ export default function ProfilePage({
   const [phase, setPhase] = useState<SyncPhase>(() => (isLoggedIn !== false && syncEnabled ? 'syncing' : 'off'));
   const [loading, setLoading] = useState(() => isLoggedIn !== false && syncEnabled);
   const [syncError, setSyncError] = useState(false);
+  const [syncErrorMessage, setSyncErrorMessage] = useState('');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => initialCache?.syncedAt || null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -246,6 +256,7 @@ export default function ProfilePage({
       setEarnedBadges([]);
       setLastSyncedAt(null);
       setSyncError(false);
+      setSyncErrorMessage('');
       setLoading(false);
       setPhase('off');
       setEditOpen(false);
@@ -269,6 +280,7 @@ export default function ProfilePage({
     setEarnedBadges([]);
     setLastSyncedAt(null);
     setSyncError(false);
+    setSyncErrorMessage('');
     setLoading(false);
     setPhase('off');
     clearOverviewCache();
@@ -279,6 +291,7 @@ export default function ProfilePage({
     if (!loggedIn) {
       setLoading(false);
       setSyncError(false);
+      setSyncErrorMessage('');
       setPhase('off');
       return undefined;
     }
@@ -286,6 +299,7 @@ export default function ProfilePage({
     if (!syncEnabled) {
       setLoading(false);
       setSyncError(false);
+      setSyncErrorMessage('');
       setPhase('off');
       return undefined;
     }
@@ -294,6 +308,7 @@ export default function ProfilePage({
     const controller = new AbortController();
     setLoading(true);
     setSyncError(false);
+    setSyncErrorMessage('');
     setPhase('syncing');
 
     const load = async () => {
@@ -330,20 +345,37 @@ export default function ProfilePage({
           setLastSyncedAt(syncedAt);
           writeOverviewCache({ profile: nextProfile, badges: nextBadges, syncedAt });
           setSyncError(false);
+          setSyncErrorMessage('');
           setPhase('ok');
           if (manualSync.current) {
             manualSync.current = false;
             showToast('档案已同步');
           }
         } else {
+          const reason =
+            profileResult.status === 'rejected'
+              ? profileResult.reason
+              : badgesResult.status === 'rejected'
+                ? badgesResult.reason
+                : null;
           manualSync.current = false;
           setSyncError(true);
+          setSyncErrorMessage(
+            isBackendUnavailable(reason)
+              ? '网络异常，请检查后端是否启动'
+              : '档案暂时无法同步',
+          );
           setPhase('error');
         }
-      } catch {
+      } catch (error) {
         if (!cancelled && !controller.signal.aborted) {
           manualSync.current = false;
           setSyncError(true);
+          setSyncErrorMessage(
+            isBackendUnavailable(error)
+              ? '网络异常，请检查后端是否启动'
+              : '档案暂时无法同步',
+          );
           setPhase('error');
         }
       } finally {
@@ -394,6 +426,7 @@ export default function ProfilePage({
         manualSync.current = false;
         setLoading(false);
         setSyncError(false);
+        setSyncErrorMessage('');
         setPhase('off');
         return;
       }
@@ -447,7 +480,11 @@ export default function ProfilePage({
         expireSession('登录已过期，请重新登录');
         return;
       }
-      setSaveError('保存失败，请检查网络后重试');
+      setSaveError(
+        isBackendUnavailable(error)
+          ? '网络异常，请检查后端是否启动'
+          : '保存失败，请检查网络后重试',
+      );
     } finally {
       setSaving(false);
     }
@@ -462,6 +499,7 @@ export default function ProfilePage({
     setEarnedBadges([]);
     setLastSyncedAt(null);
     setSyncError(false);
+    setSyncErrorMessage('');
     setLoading(false);
     setPhase('off');
     setEditOpen(false);
@@ -482,7 +520,7 @@ export default function ProfilePage({
     if (!loggedIn) return '登录后查看个人档案';
     if (!syncEnabled) return '同步已暂停 · 档案仅保存在本机';
     if (loading) return '正在同步训练档案…';
-    if (syncError) return '档案暂时无法同步';
+    if (syncError) return syncErrorMessage || '档案暂时无法同步';
     if (lastSyncedAt) return `训练档案已同步 · ${formatSyncedAt(lastSyncedAt)}`;
     return '训练档案已同步';
   })();
@@ -598,13 +636,21 @@ export default function ProfilePage({
             </div>
 
             {syncError && !loading && loggedIn && syncEnabled && (
-              <button
-                type="button"
-                onClick={requestSync}
-                className="mt-3 flex items-center gap-1 bg-transparent p-0 text-[10px] font-medium text-gray-400 hover:text-gray-600"
-              >
-                <RefreshCw size={11} />档案暂时无法同步，点击重试
-              </button>
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-gray-50 p-3">
+                <WifiOff size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-medium text-gray-600">
+                    {syncErrorMessage || '档案暂时无法同步'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={requestSync}
+                    className="mt-1 flex items-center gap-1 bg-transparent p-0 text-[10px] font-bold text-[#E63946] hover:text-[#b8253a]"
+                  >
+                    <RefreshCw size={11} />重新同步
+                  </button>
+                </div>
+              </div>
             )}
 
             {!syncEnabled && loggedIn && !loading && (
