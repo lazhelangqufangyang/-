@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Trophy } from 'lucide-react';
+import { apiRequest } from '../api/client';
 
 export type PRKey = 'chest' | 'back' | 'shoulders' | 'arms' | 'legs';
 
@@ -9,14 +10,29 @@ export type PRData = {
   weight: number;
   date: string;
   color: string;
+  /** public/images 下的肌肉剪影图，例如 /images/chest.png */
+  img: string;
 };
 
 export const mockPRData: Record<PRKey, PRData> = {
-  chest: { name: '胸部卧推', weight: 100, date: '2026-10-15', color: '#E63946' },
-  back: { name: '背部硬拉', weight: 120, date: '2026-11-01', color: '#3B82F6' },
-  shoulders: { name: '肩部推举', weight: 70, date: '2026-09-28', color: '#F59E0B' },
-  arms: { name: '手臂弯举', weight: 45, date: '2026-10-22', color: '#A855F7' },
-  legs: { name: '腿部深蹲', weight: 140, date: '2026-10-08', color: '#22C55E' },
+  chest: { name: '胸部卧推', weight: 100, date: '2026-10-15', color: '#E63946', img: '/images/chest.png' },
+  back: { name: '背部硬拉', weight: 120, date: '2026-11-01', color: '#3B82F6', img: '/images/back.png' },
+  shoulders: { name: '肩部推举', weight: 70, date: '2026-09-28', color: '#F59E0B', img: '/images/shoulders.png' },
+  arms: { name: '手臂弯举', weight: 45, date: '2026-10-22', color: '#A855F7', img: '/images/arms.png' },
+  legs: { name: '腿部深蹲', weight: 140, date: '2026-10-08', color: '#22C55E', img: '/images/legs.png' },
+};
+
+/**
+ * 仅用于本地预览的兜底图：如果你已经把 chest.png / back.png 等放进
+ * public/images，会优先使用 mockPRData.img；没有时自动退回这些旧图。
+ * 正式图片准备好后可以删除这个常量。
+ */
+const IMAGE_FALLBACKS: Record<PRKey, string> = {
+  chest: '/images/part-chest.jpg',
+  back: '/images/part-back.jpg',
+  shoulders: '/images/part-chest.jpg',
+  arms: '/images/part-arm.jpg',
+  legs: '/images/part-core.jpg',
 };
 
 const PR_TABS: { key: PRKey; label: string }[] = [
@@ -26,6 +42,38 @@ const PR_TABS: { key: PRKey; label: string }[] = [
   { key: 'arms', label: '手臂' },
   { key: 'legs', label: '腿部' },
 ];
+
+const PR_KEYS = PR_TABS.map((tab) => tab.key);
+
+function normalizePRData(payload: unknown): Record<PRKey, PRData> {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('PR 数据格式不正确');
+  }
+
+  const root = (payload as { data?: unknown }).data ?? payload;
+  if (!root || typeof root !== 'object') {
+    throw new Error('PR 数据格式不正确');
+  }
+
+  const merged = { ...mockPRData };
+  for (const key of PR_KEYS) {
+    const item = (root as Record<string, unknown>)[key];
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Partial<PRData>;
+
+    merged[key] = {
+      name: typeof raw.name === 'string' && raw.name ? raw.name : mockPRData[key].name,
+      weight: Number.isFinite(Number(raw.weight))
+        ? Number(raw.weight)
+        : mockPRData[key].weight,
+      date: typeof raw.date === 'string' && raw.date ? raw.date : mockPRData[key].date,
+      color: typeof raw.color === 'string' && raw.color ? raw.color : mockPRData[key].color,
+      img: typeof raw.img === 'string' && raw.img ? raw.img : mockPRData[key].img,
+    };
+  }
+
+  return merged;
+}
 
 type Particle = {
   angle: number;
@@ -99,16 +147,16 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
 
     resize();
 
-    const count = Math.max(64, Math.min(132, Math.floor(width * 0.3)));
+    const count = Math.max(72, Math.min(124, Math.floor(width * 0.29)));
     for (let i = 0; i < count; i += 1) {
       particles.push({
         angle: Math.random() * Math.PI * 2,
-        radius: 16 + Math.pow(Math.random(), 0.6) * Math.min(width, height) * 0.34,
-        speed: 0.12 + Math.random() * 0.42,
-        size: 0.7 + Math.random() * 2.2,
-        alpha: 0.25 + Math.random() * 0.65,
+        radius: 8 + Math.pow(Math.random(), 1.45) * Math.min(width, height) * 0.18,
+        speed: 0.06 + Math.random() * 0.2,
+        size: 0.7 + Math.random() * 2,
+        alpha: 0.2 + Math.random() * 0.58,
         seed: Math.random() * 10,
-        gold: i % 9 === 0,
+        gold: i % 10 === 0,
       });
     }
 
@@ -117,8 +165,11 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
 
     const draw = (now: number) => {
       const t = (now - startedAt) / 1000;
-      const cx = width / 2 + Math.sin(t * 0.48) * 16;
-      const cy = height * 0.46 + Math.cos(t * 0.4) * 9;
+      // 中心固定在肌肉剪影的胸腔位置，只做极轻微游走。
+      const cx = width / 2 + Math.sin(t * 0.42) * 4;
+      const cy = height * 0.43 + Math.cos(t * 0.36) * 3;
+      // 心跳 / 能量呼吸：所有粒子围绕中心一起收缩、扩散。
+      const breath = 1 + Math.sin(t * 2.15) * 0.075 + Math.sin(t * 0.78) * 0.025;
 
       let burstScale = 1;
       const burst = burstRef.current;
@@ -135,13 +186,14 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
         }
       }
 
+      const pulse = breath * burstScale;
       const activeColor = colorRef.current;
       ctx.clearRect(0, 0, width, height);
 
-      // 中心能量光晕
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(width, height) * 0.48);
-      glow.addColorStop(0, rgba(activeColor, 0.2));
-      glow.addColorStop(0.35, rgba(activeColor, 0.08));
+      // 中心能量光晕，范围收紧到肌肉剪影中央。
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(width, height) * 0.3);
+      glow.addColorStop(0, rgba(activeColor, 0.22));
+      glow.addColorStop(0.38, rgba(activeColor, 0.07));
       glow.addColorStop(1, rgba(activeColor, 0));
 
       ctx.save();
@@ -149,49 +201,62 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
       ctx.fillRect(0, 0, width, height);
       ctx.globalCompositeOperation = 'lighter';
 
-      // 旋转轨道
+      // 心跳扩散环
       for (let ring = 0; ring < 3; ring += 1) {
-        const ringRadius = (42 + ring * 27) * burstScale;
+        const phase = (t * 0.32 + ring / 3) % 1;
+        const ringRadius = (22 + phase * 68) * pulse;
         ctx.beginPath();
-        ctx.ellipse(
-          cx,
-          cy,
-          ringRadius,
-          ringRadius * 0.56,
-          t * 0.22 + ring * 0.5,
-          0,
-          Math.PI * 2,
-        );
-        ctx.strokeStyle = rgba(activeColor, 0.08 - ring * 0.018);
+        ctx.ellipse(cx, cy, ringRadius, ringRadius * 0.72, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(activeColor, 0.13 * (1 - phase));
         ctx.lineWidth = 1;
         ctx.stroke();
       }
 
-      // 核心亮点
-      const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 76 * burstScale);
-      coreGlow.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
-      coreGlow.addColorStop(0.08, rgba(activeColor, 0.85));
-      coreGlow.addColorStop(0.35, rgba(activeColor, 0.18));
+      // 中心核心，随呼吸一起脉动。
+      const coreRadius = (5.5 + Math.sin(t * 2.15) * 1.6) * pulse;
+      const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 72 * pulse);
+      coreGlow.addColorStop(0, 'rgba(255, 255, 255, 0.78)');
+      coreGlow.addColorStop(0.09, rgba(activeColor, 0.88));
+      coreGlow.addColorStop(0.42, rgba(activeColor, 0.16));
       coreGlow.addColorStop(1, rgba(activeColor, 0));
       ctx.fillStyle = coreGlow;
       ctx.beginPath();
-      ctx.arc(cx, cy, 76 * burstScale, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 72 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = activeColor;
       ctx.fill();
 
-      // 粒子星云
-      for (const particle of particles) {
+      // 粒子向中心聚拢做能量呼吸，只保留很慢的环绕。
+      particles.forEach((particle, index) => {
         const angle = particle.angle + t * particle.speed;
-        const radius = particle.radius * burstScale;
+        const radius =
+          particle.radius *
+          pulse *
+          (1 + Math.sin(t * 1.55 + particle.seed) * 0.12);
         const x =
           cx +
-          Math.cos(angle) * radius * 1.16 +
-          Math.sin(t * 0.8 + particle.seed) * 5;
+          Math.cos(angle) * radius * 1.05 +
+          Math.sin(t * 0.65 + particle.seed) * 2.5;
         const y =
           cy +
-          Math.sin(angle) * radius * 0.62 +
-          Math.cos(t * 0.66 + particle.seed) * 4;
-        const twinkle = 0.55 + 0.45 * Math.sin(t * 1.5 + particle.seed);
+          Math.sin(angle) * radius * 0.72 +
+          Math.cos(t * 0.58 + particle.seed) * 2;
+        const twinkle = 0.55 + 0.45 * Math.sin(t * 1.35 + particle.seed);
         const particleColor = particle.gold ? '#F5C451' : activeColor;
+
+        // 少量能量丝线把粒子拉回中心，形成“流转”而不是星空。
+        if (index % 6 === 0) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(x, y);
+          ctx.strokeStyle = rgba(particleColor, 0.08 * twinkle);
+          ctx.lineWidth = 0.7;
+          ctx.stroke();
+        }
 
         ctx.beginPath();
         ctx.arc(x, y, particle.size, 0, Math.PI * 2);
@@ -199,7 +264,7 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
         ctx.shadowBlur = particle.gold ? 12 : 8;
         ctx.shadowColor = particleColor;
         ctx.fill();
-      }
+      });
 
       ctx.restore();
       raf = requestAnimationFrame(draw);
@@ -216,17 +281,75 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;
 }
 
+function PRSkeleton({ className = '' }: { className?: string }) {
+  return (
+    <section
+      className={`relative h-[380px] overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_28px_80px_rgba(0,0,0,0.42)] ${className}`}
+      aria-busy="true"
+      aria-label="正在加载个人最好成绩"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(230,57,70,0.12),transparent_60%)]" />
+      <div className="relative z-20 animate-pulse px-4 pt-4">
+        <div className="flex items-center justify-between">
+          <div className="h-2.5 w-28 rounded bg-white/10" />
+          <div className="h-2.5 w-14 rounded bg-white/10" />
+        </div>
+        <div className="mt-3 flex gap-6">
+          {[28, 28, 28, 28, 28].map((width, index) => (
+            <div key={index} className="h-3 rounded bg-white/10" style={{ width }} />
+          ))}
+        </div>
+      </div>
+      <div className="absolute left-1/2 top-[42%] h-20 w-20 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-white/10 bg-white/5" />
+      <div className="absolute inset-x-4 bottom-4 animate-pulse rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-md">
+        <div className="h-2.5 w-24 rounded bg-white/10" />
+        <div className="mt-2 h-3 w-20 rounded bg-white/10" />
+        <div className="mt-3 h-10 w-28 rounded bg-white/10" />
+        <div className="absolute bottom-4 right-4 h-3 w-20 rounded bg-white/10" />
+      </div>
+    </section>
+  );
+}
+
 export default function PersonalRecord({
-  data = mockPRData,
   className = '',
 }: {
-  data?: Record<PRKey, PRData>;
   className?: string;
 }) {
+  const [prData, setPrData] = useState<Record<PRKey, PRData> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [activeKey, setActiveKey] = useState<PRKey>('chest');
   const [burstKey, setBurstKey] = useState(0);
 
-  const activeData = data[activeKey] ?? mockPRData[activeKey];
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const load = async () => {
+      try {
+        const payload = await apiRequest<unknown>('/api/user/pr_data', {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setPrData(normalizePRData(payload));
+        setUsingFallback(false);
+      } catch {
+        if (controller.signal.aborted) return;
+        // 后端未启动或数据异常时，用组件内 mockPRData 兜底，不让卡片白屏。
+        setPrData(mockPRData);
+        setUsingFallback(true);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => controller.abort();
+  }, []);
+
+  if (loading || !prData) return <PRSkeleton className={className} />;
+
+  const activeData = prData[activeKey] ?? mockPRData[activeKey];
 
   const selectPart = (key: PRKey) => {
     if (key === activeKey) return;
@@ -240,7 +363,43 @@ export default function PersonalRecord({
       aria-label="个人最好成绩"
     >
       {/* 边框微光与暗色网格 */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(230,57,70,0.14),transparent_58%)]" />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: `radial-gradient(circle at 50% 42%, ${activeData.color}26, transparent 60%)` }}
+      />
+
+      {/* 底层肌肉剪影：图片在 Canvas 下面，切换部位时淡入淡出 */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={activeKey}
+            src={activeData.img}
+            alt={`${activeData.name}肌肉剪影`}
+            initial={{ opacity: 0, scale: 1.08 }}
+            animate={{ opacity: 0.48, scale: 1.02 }}
+            exit={{ opacity: 0, scale: 1.08 }}
+            transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            style={{ filter: 'grayscale(1) contrast(1.15) brightness(0.62)' }}
+            onError={(event) => {
+              const image = event.currentTarget;
+              // 新图片还没就位时，优先退回项目里已有的部位图，避免整张卡片空掉。
+              if (!image.dataset.fallback) {
+                image.dataset.fallback = '1';
+                image.src = IMAGE_FALLBACKS[activeKey];
+                return;
+              }
+              image.style.visibility = 'hidden';
+            }}
+          />
+        </AnimatePresence>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-slate-950/70" />
+        <div
+          className="absolute inset-0 opacity-25 mix-blend-color"
+          style={{ background: `radial-gradient(circle at 50% 42%, ${activeData.color}, transparent 64%)` }}
+        />
+      </div>
+
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.08]"
         style={{
@@ -263,7 +422,9 @@ export default function PersonalRecord({
           <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
             PERSONAL RECORD
           </span>
-          <span className="font-mono text-[9px] tracking-[0.12em] text-white/25">PR / MAX</span>
+          <span className={`font-mono text-[9px] tracking-[0.12em] ${usingFallback ? 'text-amber-300/60' : 'text-white/25'}`}>
+            {usingFallback ? 'LOCAL FALLBACK' : 'PR / MAX'}
+          </span>
         </div>
 
         <div className="no-scrollbar mt-3 flex gap-6 overflow-x-auto" role="tablist" aria-label="选择训练部位">

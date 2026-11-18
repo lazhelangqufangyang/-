@@ -25,7 +25,8 @@ export default defineConfig({
     // 本地开发统一走同源 /api：由 Vite 代理到真实后端，避免跨域和 HTML fallback。
     proxy: {
       '/api': {
-        target: process.env.FITPLAN_API_URL || `http://localhost:${process.env.FITPLAN_API_PORT || 8080}`,
+        // 项目后端 application.yml 默认端口是 8787；可用 FITPLAN_API_URL/PORT 覆盖。
+        target: process.env.FITPLAN_API_URL || `http://localhost:${process.env.FITPLAN_API_PORT || 8787}`,
         changeOrigin: true,
       },
     },

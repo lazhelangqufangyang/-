@@ -7,17 +7,14 @@ import {
   HelpCircle,
   Loader2,
   Plus,
-  RefreshCw,
   WifiOff,
 } from 'lucide-react';
-import { apiRequest, ApiError, getErrorMessage, isBackendUnavailable } from '../api/client';
+import { apiRequest } from '../api/client';
 
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const DEFAULT_SET_COUNT = 4;
-/** 后端未启动时，开发环境可把 VITE_USE_MOCK 改成 true，使用本地降级数据调 UI。 */
-const USE_LOCAL_FALLBACK = import.meta.env.VITE_USE_MOCK === 'true';
 
 const dateKey = () => {
   const d = new Date();
@@ -93,7 +90,7 @@ const makeSet = (
 
 const LOCAL_FALLBACK_WORKOUT: Workout = {
   id: 'local-fallback',
-  name: '本地演示训练',
+  name: '通用训练计划',
   exercises: [
     {
       id: 'local-lat-pulldown',
@@ -108,6 +105,18 @@ const LOCAL_FALLBACK_WORKOUT: Workout = {
       ],
     },
     {
+      id: 'local-seated-row',
+      name: '坐姿绳索划船',
+      part: '背',
+      restSec: 90,
+      sets: [
+        makeSet(45, 12, 7),
+        makeSet(45, 12, 7.5),
+        makeSet(45, 12, 7.5),
+        makeSet(45, 12, 8),
+      ],
+    },
+    {
       id: 'local-bench-press',
       name: '杠铃卧推',
       part: '胸',
@@ -119,8 +128,56 @@ const LOCAL_FALLBACK_WORKOUT: Workout = {
         makeSet(52.5, 8, 8.5),
       ],
     },
+    {
+      id: 'local-db-curl',
+      name: '哑铃弯举',
+      part: '手臂',
+      restSec: 75,
+      sets: [
+        makeSet(12.5, 12, 7),
+        makeSet(12.5, 12, 7.5),
+        makeSet(12.5, 12, 7.5),
+        makeSet(12.5, 12, 8),
+      ],
+    },
   ],
 };
+
+const DRAFT_KEY = 'fitplan.activeWorkout';
+const RECORDS_KEY = 'trainingRecords';
+
+function readGuestDraft(): Workout | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.exercises) || !parsed.exercises.length) return null;
+    return {
+      id: typeof parsed.id === 'string' ? parsed.id : 'guest-draft',
+      name: typeof parsed.name === 'string' ? parsed.name : '通用训练计划',
+      exercises: parsed.exercises,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistLocalRecord(record: WorkoutRecord) {
+  try {
+    const raw = localStorage.getItem(RECORDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const records = Array.isArray(parsed) ? parsed : [];
+    const index = records.findIndex(
+      (item) => item.date === record.date && Array.isArray(item.actions),
+    );
+    if (index >= 0) records[index] = record;
+    else records.unshift(record);
+    localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* localStorage 不可用时仍允许本次训练完成 */
+  }
+}
 
 function WorkoutSkeleton() {
   return (
@@ -351,56 +408,69 @@ function ExerciseCard({
   );
 }
 
-export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining?: (record: WorkoutRecord) => void }) {
+export default function WorkoutPage({
+  isLoggedIn = false,
+  onCompleteTraining,
+}: {
+  isLoggedIn?: boolean;
+  onCompleteTraining?: (record: WorkoutRecord) => void;
+}) {
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [openRpe, setOpenRpe] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
   const [usingFallback, setUsingFallback] = useState(false);
-  const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setLoadError('');
     setUsingFallback(false);
     setWorkout(null);
+
+    // 游客直接使用通用计划，不请求后端。
+    if (!isLoggedIn) {
+      setWorkout(readGuestDraft() ?? LOCAL_FALLBACK_WORKOUT);
+      setUsingFallback(true);
+      setLoading(false);
+      return () => controller.abort();
+    }
 
     apiRequest<ApiWorkout | { workout: ApiWorkout } | undefined>('/users/me/workouts/active', {
       signal: controller.signal,
     })
       .then((data) => {
-        setWorkout(data ? normalizeWorkout(data) : null);
-        setUsingFallback(false);
-      })
-      .catch((error) => {
-        if (controller.signal.aborted) return;
-        if (error instanceof ApiError && error.status === 404) {
-          setWorkout(null);
-          return;
-        }
-
-        // 开发降级开关：后端未启动时仍可继续调动作列表 UI。
-        if (USE_LOCAL_FALLBACK) {
+        const next = data ? normalizeWorkout(data) : null;
+        // 后端没有返回计划时仍保证用户可以开始训练。
+        if (!next || !next.exercises.length) {
           setWorkout(LOCAL_FALLBACK_WORKOUT);
           setUsingFallback(true);
           return;
         }
-
-        setLoadError(
-          isBackendUnavailable(error)
-            ? '网络异常，请检查后端是否启动'
-            : getErrorMessage(error) || '训练计划加载失败',
-        );
+        setWorkout(next);
+        setUsingFallback(false);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        // 502 / 401 / 后端断开：自动降级为通用计划，保留训练入口。
+        setWorkout(LOCAL_FALLBACK_WORKOUT);
+        setUsingFallback(true);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => controller.abort();
-  }, [reloadKey]);
+  }, [isLoggedIn]);
+
+  // 游客的训练进度只保存在本机，刷新后还能接着练。
+  useEffect(() => {
+    if (isLoggedIn || !workout) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(workout));
+    } catch {
+      /* ignore */
+    }
+  }, [isLoggedIn, workout]);
 
   const exercises = workout?.exercises ?? [];
   const totalSets = useMemo(() => exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0), [exercises]);
@@ -447,7 +517,6 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
   const completeTraining = async () => {
     if (!workout || submitting || !totalSets) return;
     setSubmitting(true);
-    setSubmitError('');
 
     const actions = exercises.filter((exercise) => exercise.sets.length > 0).map((exercise) => ({
       id: uid('action'),
@@ -467,6 +536,20 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
       progress,
     };
 
+    const localRecord: WorkoutRecord = {
+      ...payload,
+      id: uid('training'),
+      createdAt: new Date().toISOString(),
+    };
+
+    // 未登录：只写 localStorage，不请求后端。
+    if (!isLoggedIn) {
+      persistLocalRecord(localRecord);
+      onCompleteTraining?.(localRecord);
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const savedPayload = await apiRequest<WorkoutRecord | { record: WorkoutRecord } | undefined>(
         '/users/me/training-records',
@@ -480,14 +563,22 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
           ? savedPayload.record
           : savedPayload;
 
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
+
       onCompleteTraining?.({
         ...payload,
         ...saved,
         id: saved?.id ?? uid('training'),
         createdAt: saved?.createdAt ?? new Date().toISOString(),
       });
-    } catch (error) {
-      setSubmitError(getErrorMessage(error) || '保存训练记录失败，请稍后重试');
+    } catch {
+      // 登录用户遇到 502/断网时也先落本机，训练不丢。
+      persistLocalRecord(localRecord);
+      onCompleteTraining?.(localRecord);
     } finally {
       setSubmitting(false);
     }
@@ -519,37 +610,23 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
 
           {loading && <WorkoutSkeleton />}
 
-          {!loading && loadError && (
-            <>
-              <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 text-center shadow-sm">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-400">
-                  <WifiOff size={18} />
-                </div>
-                <p className="mt-3 text-sm font-bold text-gray-800">无法加载训练计划</p>
-                <p className="mt-1 text-xs text-gray-500">{loadError}</p>
-                <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#E63946] px-4 py-2 text-xs font-bold text-white active:scale-95">
-                  <RefreshCw size={13} />重新加载
-                </button>
-              </div>
-              <WorkoutSkeleton />
-            </>
-          )}
-
-          {!loading && !loadError && usingFallback && (
+          {!loading && usingFallback && (
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-medium text-amber-700">
-              <WifiOff size={12} />
-              本地演示数据 · 后端未连接
+              {isLoggedIn ? <WifiOff size={12} /> : <Dumbbell size={12} />}
+              {isLoggedIn
+                ? '网络异常 · 已切换通用训练计划'
+                : '游客模式 · 通用训练计划，进度保存在本机'}
             </div>
           )}
 
-          {!loading && !loadError && (!workout || !exercises.length) && (
+          {!loading && (!workout || !exercises.length) && (
             <div className="mt-6 rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
               <Dumbbell size={24} className="mx-auto text-gray-300" />
               <p className="mt-2 text-sm font-bold text-gray-700">今天没有训练安排</p>
             </div>
           )}
 
-          {!loading && !loadError && exercises.length > 0 && (
+          {!loading && exercises.length > 0 && (
             <section className="mt-6 space-y-3">
               {exercises.map((exercise, index) => (
                 <ExerciseCard key={exercise.id} exercise={exercise} index={index} openRpe={openRpe} onToggleRpe={toggleRpe} onToggleDone={toggleDone} onRpeChange={changeRpe} onAddSet={addSet} />
@@ -558,9 +635,8 @@ export default function WorkoutPage({ onCompleteTraining }: { onCompleteTraining
           )}
         </div>
 
-        {!loading && !loadError && exercises.length > 0 && (
+        {!loading && exercises.length > 0 && (
           <div className="sticky bottom-[60px] z-40 mx-auto mt-6 w-full max-w-md border-t border-gray-100 bg-white/95 px-4 pb-3 pt-3 shadow-[0_-8px_24px_rgba(17,24,39,0.06)] backdrop-blur">
-            {submitError && <p className="mb-2 text-center text-[11px] font-medium text-red-500">{submitError}</p>}
             <button type="button" disabled={submitting || !totalSets} onClick={completeTraining} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#E63946] text-base font-black tracking-wide text-white shadow-[0_10px_24px_rgba(230,57,70,0.28)] transition-all hover:bg-[#d92b3a] disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.97]">
               {submitting && <Loader2 size={19} className="animate-spin" />}
               {submitting ? '保存中...' : '完成今日训练'}

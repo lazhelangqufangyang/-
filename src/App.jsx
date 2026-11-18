@@ -110,12 +110,17 @@ export default function App() {
 }
 function AppInner() {
     const [state, setState] = useState(() => loadState());
+    const [isLoggedIn, setIsLoggedIn] = useState(() => {
+        try {
+            return Boolean(sessionToken()) || localStorage.getItem('fitplan.mockAuth') === '1';
+        }
+        catch {
+            return false;
+        }
+    });
     /** 登录过就不再把开头的欢迎页顶出来：换了设备登同一个账号也是直接进运动页 */
-    const entered = state.onboardingDone || Boolean(sessionToken());
+    const entered = state.onboardingDone || isLoggedIn;
     const [route, setRoute] = useState(() => normalize(window.location.hash, entered));
-    /** 登录/退出都会改 localStorage 里的令牌：路由变化或本地主动通知时重算一次 */
-    const [authVersion, setAuthVersion] = useState(0);
-    const loggedIn = useMemo(() => Boolean(sessionToken()), [route, authVersion]);
     const tabRef = useRef(tabOfRoute(route));
     /** 记一条运动时，动作要去「动作」页挑；这里存着还没提交的那一条 */
     const [recPick, setRecPick] = useState(null);
@@ -124,7 +129,7 @@ function AppInner() {
     const [rewardBadge, setRewardBadge] = useState(null);
     useEffect(() => {
         const onHash = () => {
-            const next = normalize(window.location.hash, state.onboardingDone || Boolean(sessionToken()));
+            const next = normalize(window.location.hash, state.onboardingDone || isLoggedIn);
             const tab = tabOfRoute(next);
             if (tab)
                 tabRef.current = tab;
@@ -132,11 +137,18 @@ function AppInner() {
         };
         window.addEventListener('hashchange', onHash);
         return () => window.removeEventListener('hashchange', onHash);
-    }, [state.onboardingDone]);
+    }, [state.onboardingDone, isLoggedIn]);
+    // 设置页拿到真实令牌后，同步成登录态；Mock 登录则直接写本地标记。
+    useEffect(() => {
+        if (sessionToken())
+            setIsLoggedIn(true);
+    }, [route]);
     // 支付宝登录回来时令牌挂在 URL 片段上：收进 localStorage、把地址栏洗干净
     useEffect(() => {
-        if (pickUpTokenFromHash())
-            setRoute(normalize('#/settings', state.onboardingDone || Boolean(sessionToken())));
+        if (pickUpTokenFromHash()) {
+            setIsLoggedIn(true);
+            setRoute(normalize('#/settings', true));
+        }
     }, [state.onboardingDone]);
     useEffect(() => {
         saveState(state);
@@ -407,6 +419,25 @@ function AppInner() {
         setRewardBadge(record?.badge ?? null);
         setRewardOpen(true);
     }, []);
+    /** 没有真实登录接口时，用本地标记模拟登录，便于测试游客/登录两种状态 */
+    const mockLogin = useCallback(() => {
+        try {
+            localStorage.setItem('fitplan.mockAuth', '1');
+        }
+        catch {
+            /* 隐私模式下仍允许本次会话登录 */
+        }
+        setIsLoggedIn(true);
+    }, []);
+    const handleLogout = useCallback(() => {
+        try {
+            localStorage.removeItem('fitplan.mockAuth');
+        }
+        catch {
+            /* ignore */
+        }
+        setIsLoggedIn(false);
+    }, []);
     const removeActivity = useCallback((id) => {
         setState((s) => ({ ...s, activityLogs: s.activityLogs.filter((x) => x.id !== id) }));
     }, []);
@@ -451,7 +482,7 @@ function AppInner() {
         ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
         : null;
     return (<div className="app">
-      {route === 'session' ? (<WorkoutPage onCompleteTraining={handleCompleteTraining}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
+      {route === 'session' ? (<WorkoutPage isLoggedIn={isLoggedIn} onCompleteTraining={handleCompleteTraining}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
           {!isBarePage && (<header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
@@ -466,10 +497,10 @@ function AppInner() {
           <main className="screen" style={isBarePage ? { padding: 0, maxWidth: 'none' } : undefined}>
             {tab === 'train' ? (<TrainingHome profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
             {tab === 'moves' ? (<ExercisePickerPage/>) : null}
-            {tab === 'log' ? (<RecordPage/>) : null}
+            {tab === 'log' ? (<RecordPage isLoggedIn={isLoggedIn}/>) : null}
             {tab === 'diet' ? (<DietView profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (route === 'settings'
-                ? <ProfilePage isLoggedIn={loggedIn} onLogin={() => go('#/settings/account')} onLogout={() => setAuthVersion((version) => version + 1)} onOpenModule={(module) => go(`#/settings/${module}`)}/>
+                ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)}/>
                 : (<SettingsView state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">

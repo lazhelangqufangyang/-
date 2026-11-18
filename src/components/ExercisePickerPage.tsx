@@ -3,13 +3,22 @@ import type { Swiper as SwiperType } from 'swiper';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCoverflow } from 'swiper/modules';
 import { ChevronRight, Dumbbell, Search, X } from 'lucide-react';
+import { BROWSE_AREAS, EXERCISES } from '../engine/exercises.js';
 import 'swiper/css';
 import 'swiper/css/effect-coverflow';
+
+type RawExercise = {
+  id: string;
+  name: string;
+  muscles?: string[];
+  equipment?: string[];
+};
 
 type Exercise = {
   id: string;
   name: string;
   muscle: string;
+  equipment: string;
 };
 
 type TrainingPart = {
@@ -21,134 +30,129 @@ type TrainingPart = {
   actions: Exercise[];
 };
 
-const makeActions = (partId: string, items: [string, string][]): Exercise[] =>
-  items.map(([name, muscle], index) => ({
-    id: `${partId}-${index}`,
-    name,
-    muscle,
-  }));
+type BrowseArea = {
+  key: string;
+  title: string;
+  test: (exercise: RawExercise) => boolean;
+};
 
-const PARTS: TrainingPart[] = [
+const AREA_MAP = new Map(
+  (BROWSE_AREAS as BrowseArea[]).map((area) => [area.key, area]),
+);
+
+const toAction = (exercise: RawExercise): Exercise => {
+  const muscles = Array.isArray(exercise.muscles) ? exercise.muscles : [];
+  const equipment = Array.isArray(exercise.equipment) ? exercise.equipment : [];
+
+  return {
+    id: String(exercise.id),
+    name: exercise.name,
+    muscle: muscles.slice(0, 2).join(' · ') || '全身',
+    equipment: equipment.join(' / ') || '自重',
+  };
+};
+
+const actionsFor = (keys: string[] = [], all = false): Exercise[] => {
+  const source = all
+    ? (EXERCISES as RawExercise[])
+    : (EXERCISES as RawExercise[]).filter((exercise) =>
+        keys.some((key) => AREA_MAP.get(key)?.test(exercise)),
+      );
+
+  return source.map(toAction);
+};
+
+const PART_DEFS: Array<{
+  id: string;
+  title: string;
+  shortName: string;
+  image: string;
+  muscles: string;
+  keys?: string[];
+  all?: boolean;
+}> = [
+  {
+    id: 'all',
+    title: '全部动作',
+    shortName: '全部',
+    image:
+      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=900&q=80',
+    muscles: '完整动作库 · 7 大部位',
+    all: true,
+  },
   {
     id: 'chest',
     title: '胸部训练',
     shortName: '胸部',
-    image: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=900&q=80',
     muscles: '胸大肌 · 三角肌前束',
-    actions: makeActions('chest', [
-      ['杠铃卧推', '胸大肌'],
-      ['上斜哑铃卧推', '上胸'],
-      ['哑铃飞鸟', '胸大肌'],
-      ['双杠臂屈伸', '下胸'],
-      ['绳索夹胸', '胸内侧'],
-      ['俯卧撑', '胸大肌'],
-      ['器械推胸', '胸大肌'],
-      ['下斜卧推', '下胸'],
-    ]),
+    keys: ['chest'],
   },
   {
     id: 'back',
     title: '背部训练',
     shortName: '背部',
-    image: 'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1603287681836-b174ce5074c2?auto=format&fit=crop&w=900&q=80',
     muscles: '背阔肌 · 斜方肌',
-    actions: makeActions('back', [
-      ['引体向上', '背阔肌'],
-      ['高位下拉', '背阔肌'],
-      ['杠铃划船', '中背'],
-      ['单臂哑铃划船', '背阔肌'],
-      ['坐姿绳索划船', '中背'],
-      ['直臂下压', '背阔肌'],
-      ['面拉', '三角后束'],
-      ['硬拉', '后链'],
-    ]),
+    keys: ['back'],
   },
   {
     id: 'shoulder',
     title: '肩部训练',
     shortName: '肩部',
-    image: 'https://images.unsplash.com/photo-1532029837206-abbe2b7620e3?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1532029837206-abbe2b7620e3?auto=format&fit=crop&w=900&q=80',
     muscles: '三角肌前中后束',
-    actions: makeActions('shoulder', [
-      ['站姿推举', '三角前束'],
-      ['哑铃侧平举', '三角中束'],
-      ['俯身飞鸟', '三角后束'],
-      ['阿诺德推举', '三角前中束'],
-      ['绳索侧平举', '三角中束'],
-      ['面拉', '三角后束'],
-      ['杠铃提拉', '三角中束'],
-      ['反向蝴蝶机', '三角后束'],
-    ]),
+    keys: ['shoulder'],
   },
   {
     id: 'arms',
     title: '手臂训练',
     shortName: '手臂',
-    image: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?auto=format&fit=crop&w=900&q=80',
     muscles: '肱二头肌 · 肱三头肌',
-    actions: makeActions('arms', [
-      ['杠铃弯举', '肱二头肌'],
-      ['哑铃弯举', '肱二头肌'],
-      ['锤式弯举', '肱桡肌'],
-      ['绳索下压', '肱三头肌'],
-      ['仰卧臂屈伸', '肱三头肌'],
-      ['双杠臂屈伸', '肱三头肌'],
-      ['牧师凳弯举', '肱二头肌'],
-      ['窄距卧推', '肱三头肌'],
-    ]),
+    keys: ['arm'],
   },
   {
     id: 'legs',
     title: '腿部训练',
     shortName: '腿部',
-    image: 'https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=900&q=80',
-    muscles: '股四头肌 · 腘绳肌',
-    actions: makeActions('legs', [
-      ['杠铃后蹲', '股四头肌'],
-      ['罗马尼亚硬拉', '腘绳肌'],
-      ['腿举', '股四头肌'],
-      ['保加利亚分腿蹲', '臀腿'],
-      ['腿屈伸', '股四头肌'],
-      ['腿弯举', '腘绳肌'],
-      ['箭步蹲', '臀腿'],
-      ['站姿提踵', '小腿'],
-    ]),
+    image:
+      'https://images.unsplash.com/photo-1434682881908-b43d0467b798?auto=format&fit=crop&w=900&q=80',
+    muscles: '股四头肌 · 腘绳肌 · 臀',
+    keys: ['leg', 'glute'],
   },
   {
     id: 'abs',
     title: '腹部训练',
     shortName: '腹部',
-    image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=900&q=80',
     muscles: '腹直肌 · 腹斜肌',
-    actions: makeActions('abs', [
-      ['卷腹', '腹直肌'],
-      ['平板支撑', '核心'],
-      ['悬垂举腿', '下腹'],
-      ['俄罗斯转体', '腹斜肌'],
-      ['登山跑', '核心'],
-      ['死虫式', '核心'],
-      ['绳索卷腹', '腹直肌'],
-      ['侧平板', '腹斜肌'],
-    ]),
+    keys: ['core'],
   },
   {
     id: 'cardio',
     title: '有氧训练',
     shortName: '有氧',
-    image: 'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?auto=format&fit=crop&w=900&q=80',
+    image:
+      'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?auto=format&fit=crop&w=900&q=80',
     muscles: '心肺耐力 · 全身',
-    actions: makeActions('cardio', [
-      ['跑步机', '有氧'],
-      ['划船机', '全身'],
-      ['动感单车', '下肢'],
-      ['椭圆机', '全身'],
-      ['跳绳', '全身'],
-      ['战绳', '全身'],
-      ['爬楼机', '下肢'],
-      ['开合跳', '全身'],
-    ]),
+    keys: ['cardio'],
   },
 ];
+
+const PARTS: TrainingPart[] = PART_DEFS.map((part) => ({
+  id: part.id,
+  title: part.title,
+  shortName: part.shortName,
+  image: part.image,
+  muscles: part.muscles,
+  actions: actionsFor(part.keys, part.all),
+}));
 
 export default function ExercisePickerPage({
   onSelectExercise,
@@ -165,7 +169,8 @@ export default function ExercisePickerPage({
     (action) =>
       !keyword ||
       action.name.toLowerCase().includes(keyword) ||
-      action.muscle.toLowerCase().includes(keyword),
+      action.muscle.toLowerCase().includes(keyword) ||
+      action.equipment.toLowerCase().includes(keyword),
   );
 
   return (
@@ -212,7 +217,7 @@ export default function ExercisePickerPage({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索动作或目标肌群"
+                placeholder="搜索动作、目标肌群或器械"
                 className="w-full appearance-none border-0 bg-transparent p-0 text-sm text-gray-800 shadow-none outline-none ring-0 placeholder:text-gray-400 focus:ring-0"
                 style={{ background: 'transparent', border: 0, boxShadow: 'none', outline: 'none' }}
               />
@@ -331,7 +336,7 @@ export default function ExercisePickerPage({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold text-gray-800">{action.name}</span>
                     <span className="mt-0.5 block truncate text-[10px] font-medium text-gray-400">
-                      {action.muscle}
+                      {action.muscle} · {action.equipment}
                     </span>
                   </span>
                   <ChevronRight size={17} className="shrink-0 text-gray-300" />

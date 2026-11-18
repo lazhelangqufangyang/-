@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  ChevronRight,
   Crown,
   Dumbbell,
   Flame,
@@ -19,7 +20,8 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { apiRequest, isBackendUnavailable, isUnauthorized } from '../api/client';
-import { logOut, setSessionToken } from '../api/account.js';
+import { logOut, sessionToken, setSessionToken } from '../api/account.js';
+import PersonalRecord from './PersonalRecord';
 import BottomSheet from './profile/BottomSheet';
 import LogoutConfirmDialog from './profile/LogoutConfirmDialog';
 import ProfileSettingsSheet from './profile/ProfileSettingsSheet';
@@ -52,6 +54,17 @@ const EMPTY_PROFILE: UserProfile = {
   goal: '',
   height: null,
   weight: null,
+  avatar: '',
+};
+
+/**
+ * 联调阶段保留 DEMO_PROFILE 作为离线兜底；真实身份由 isLoggedIn + sessionToken 判断。
+ */
+const DEMO_PROFILE: UserProfile = {
+  name: '训练者',
+  goal: '增肌',
+  height: 175,
+  weight: 70,
   avatar: '',
 };
 
@@ -209,16 +222,29 @@ export default function ProfilePage({
   onSaveProfile,
   onOpenModule,
 }: ProfilePageProps) {
-  const [initialCache] = useState(() => (isLoggedIn === false ? null : readOverviewCache()));
-  const [profile, setProfile] = useState<UserProfile>(() => initialCache?.profile ?? EMPTY_PROFILE);
-  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>(() => initialCache?.badges ?? []);
+  const [initialCache] = useState(() =>
+    isLoggedIn === false ? null : readOverviewCache(),
+  );
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    initialCache?.profile ??
+    (!sessionToken() && isLoggedIn !== false ? DEMO_PROFILE : EMPTY_PROFILE),
+  );
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>(() =>
+    initialCache?.badges ?? [],
+  );
   const [loggedIn, setLoggedIn] = useState(isLoggedIn !== false);
   const [syncEnabled, setSyncEnabled] = useState<boolean>(readSyncPreference);
-  const [phase, setPhase] = useState<SyncPhase>(() => (isLoggedIn !== false && syncEnabled ? 'syncing' : 'off'));
-  const [loading, setLoading] = useState(() => isLoggedIn !== false && syncEnabled);
+  const [phase, setPhase] = useState<SyncPhase>(() =>
+    isLoggedIn !== false && syncEnabled ? 'syncing' : 'off',
+  );
+  const [loading, setLoading] = useState(() =>
+    isLoggedIn !== false && syncEnabled,
+  );
   const [syncError, setSyncError] = useState(false);
   const [syncErrorMessage, setSyncErrorMessage] = useState('');
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => initialCache?.syncedAt || null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() =>
+    initialCache?.syncedAt || null,
+  );
   const [refreshKey, setRefreshKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -287,8 +313,30 @@ export default function ProfilePage({
     manualSync.current = false;
   }, [isLoggedIn]);
 
+  // Mock 登录没有后端身份：即使请求逻辑尚未完成，也保证身体档案是本地演示值。
+  useEffect(() => {
+    if (!loggedIn || sessionToken()) return;
+    if (profile.name || profile.height != null || profile.weight != null) return;
+    setProfile(DEMO_PROFILE);
+  }, [loggedIn, profile]);
+
   useEffect(() => {
     if (!loggedIn) {
+      setLoading(false);
+      setSyncError(false);
+      setSyncErrorMessage('');
+      setPhase('off');
+      return undefined;
+    }
+
+    // Mock 登录没有后端令牌：直接用本地档案，不制造 401/502 日志。
+    if (!sessionToken()) {
+      setProfile((current) =>
+        current.name || current.height != null || current.weight != null
+          ? current
+          : DEMO_PROFILE,
+      );
+      setEarnedBadges([]);
       setLoading(false);
       setSyncError(false);
       setSyncErrorMessage('');
@@ -338,6 +386,14 @@ export default function ProfilePage({
 
         if (nextProfile) setProfile(nextProfile);
         if (nextBadges) setEarnedBadges(nextBadges);
+        if (!nextProfile) {
+          // 登录态但后端断开：保留已有缓存，没有缓存就展示本地档案，避免 --。
+          setProfile((current) =>
+            current.name || current.height != null || current.weight != null
+              ? current
+              : DEMO_PROFILE,
+          );
+        }
 
         // 两份都拿到了才算一次完整同步；只到一半时保留上一次的缓存
         if (nextProfile && nextBadges) {
@@ -460,6 +516,16 @@ export default function ProfilePage({
     setSaving(true);
     setSaveError('');
     try {
+      if (!sessionToken()) {
+        // Mock 登录：没有后端令牌时只更新本地档案。
+        const updated = { ...profile, height, weight, goal };
+        setProfile(updated);
+        setEditOpen(false);
+        showToast('档案已保存到本机');
+        onSaveProfile?.(updated);
+        return;
+      }
+
       const payload = await apiRequest<UserProfile | { profile: UserProfile } | undefined>('/users/me/profile', {
         method: 'PATCH',
         body: JSON.stringify({ height, weight, goal }),
@@ -480,19 +546,24 @@ export default function ProfilePage({
         expireSession('登录已过期，请重新登录');
         return;
       }
-      setSaveError(
-        isBackendUnavailable(error)
-          ? '网络异常，请检查后端是否启动'
-          : '保存失败，请检查网络后重试',
-      );
+      if (isBackendUnavailable(error)) {
+        // 后端断开时先保本地，避免用户刚输入的身体数据丢失。
+        const updated = { ...profile, height, weight, goal };
+        setProfile(updated);
+        setEditOpen(false);
+        showToast('后端未连接，档案已保存到本机');
+        onSaveProfile?.(updated);
+        return;
+      }
+      setSaveError('保存失败，请检查网络后重试');
     } finally {
       setSaving(false);
     }
   };
 
   const confirmLogout = () => {
-    // 先发请求（requestJson 仍能读到旧令牌），本地立刻退出，不拿网络当退出的前提
-    void logOut().catch(() => {});
+    // 真实令牌才发退出请求；Mock 登录只清本地状态。
+    if (sessionToken()) void logOut().catch(() => {});
     setSessionToken(null);
     setLoggedIn(false);
     setProfile(EMPTY_PROFILE);
@@ -518,6 +589,7 @@ export default function ProfilePage({
 
   const statusHint = (() => {
     if (!loggedIn) return '登录后查看个人档案';
+    if (!sessionToken()) return '模拟登录 · 档案保存在本机';
     if (!syncEnabled) return '同步已暂停 · 档案仅保存在本机';
     if (loading) return '正在同步训练档案…';
     if (syncError) return syncErrorMessage || '档案暂时无法同步';
@@ -531,7 +603,7 @@ export default function ProfilePage({
     <>
       <style>{`.badge-scroll::-webkit-scrollbar{display:none}.badge-scroll{scrollbar-width:none}`}</style>
       <div
-        className="min-h-screen bg-gray-50 text-gray-900"
+        className="min-h-screen bg-gray-50 pb-24 text-gray-900"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
       >
         <div className="screen-safe-top mx-auto max-w-md px-4">
@@ -543,7 +615,7 @@ export default function ProfilePage({
 
             <div className="flex shrink-0 items-center gap-2">
               <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${loading ? 'bg-gray-100 text-gray-400' : loggedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
-                {loading ? '同步中' : loggedIn ? '已登录' : '游客模式'}
+                {loading ? '同步中' : loggedIn ? '已登录' : '未登录'}
               </span>
               <button
                 type="button"
@@ -558,41 +630,53 @@ export default function ProfilePage({
             </div>
           </header>
 
-          {/* 用户身份卡：即使接口失败也保留结构 */}
+          {/* 用户身份卡：游客态直接引导登录，登录态展示头像和昵称 */}
           <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-4">
-              {showSkeleton ? (
-                <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-gray-100" />
-              ) : profile.avatar ? (
-                <img src={profile.avatar} alt={profile.name ?? '用户头像'} className="h-14 w-14 shrink-0 rounded-full object-cover ring-4 ring-[#E63946]/10" />
-              ) : (
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-rose-300 text-xl font-black text-white ring-4 ring-[#E63946]/10">
-                  {initial}
+            {!loggedIn ? (
+              <button
+                type="button"
+                onClick={handleLogin}
+                style={{ background: 'transparent', border: 0 }}
+                className="flex w-full appearance-none items-center gap-4 p-0 text-left active:scale-[0.99]"
+              >
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-rose-300 text-white ring-4 ring-[#E63946]/10">
+                  <LogIn size={22} />
                 </div>
-              )}
-
-              <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-black tracking-tight text-gray-900">点击登录</h2>
+                  <p className="mt-1 truncate text-xs text-gray-400">登录后同步专属计划，永久保存训练数据</p>
+                </div>
+                <ChevronRight size={18} className="shrink-0 text-gray-300" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-4">
                 {showSkeleton ? (
-                  <div className="space-y-2">
-                    <div className="h-4 w-28 animate-pulse rounded bg-gray-100" />
-                    <div className="h-3 w-20 animate-pulse rounded bg-gray-100" />
-                  </div>
+                  <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-gray-100" />
+                ) : profile.avatar ? (
+                  <img src={profile.avatar} alt={profile.name ?? '用户头像'} className="h-14 w-14 shrink-0 rounded-full object-cover ring-4 ring-[#E63946]/10" />
                 ) : (
-                  <>
-                    <h2 className="truncate text-lg font-black tracking-tight">
-                      {profile.name || '训练者'}
-                    </h2>
-                    <p className="mt-1 truncate text-xs text-gray-400">{statusHint}</p>
-                  </>
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-rose-300 text-xl font-black text-white ring-4 ring-[#E63946]/10">
+                    {initial}
+                  </div>
                 )}
-              </div>
 
-              {!loggedIn && !showSkeleton && (
-                <button type="button" onClick={handleLogin} className="flex shrink-0 items-center gap-1 rounded-full bg-[#E63946] px-3 py-2 text-[11px] font-bold text-white active:scale-95">
-                  <LogIn size={12} />登录
-                </button>
-              )}
-            </div>
+                <div className="min-w-0 flex-1">
+                  {showSkeleton ? (
+                    <div className="space-y-2">
+                      <div className="h-4 w-28 animate-pulse rounded bg-gray-100" />
+                      <div className="h-3 w-20 animate-pulse rounded bg-gray-100" />
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="truncate text-lg font-black tracking-tight">
+                        {profile.name || '训练者'}
+                      </h2>
+                      <p className="mt-1 truncate text-xs text-gray-400">{statusHint}</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* 我的身体档案：始终渲染，失败时显示占位 */}
@@ -604,9 +688,15 @@ export default function ProfilePage({
               </div>
               <button
                 type="button"
-                onClick={openEdit}
+                onClick={() => {
+                  if (!loggedIn) {
+                    handleLogin();
+                    return;
+                  }
+                  openEdit();
+                }}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-all hover:border-[#E63946]/30 hover:text-[#E63946] active:scale-95"
-                aria-label="编辑身体档案"
+                aria-label={loggedIn ? '编辑身体档案' : '登录后编辑身体档案'}
               >
                 <Pencil size={14} />
               </button>
@@ -664,6 +754,9 @@ export default function ProfilePage({
             )}
           </section>
 
+          {/* 我的极限重量 (PR) */}
+          <PersonalRecord className="mt-4 w-full" />
+
           {/* 荣誉墙 */}
           <section className="mt-6">
             <div className="flex items-end justify-between">
@@ -702,7 +795,7 @@ export default function ProfilePage({
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white">
                     <Lock size={16} />
                   </div>
-                  <p className="mt-2 text-xs font-bold text-gray-800">登录后保存你的荣誉</p>
+                  <p className="mt-2 text-xs font-bold text-gray-800">登录后永久保存</p>
                   <button type="button" onClick={handleLogin} className="mt-3 flex items-center gap-1.5 rounded-full bg-[#E63946] px-5 py-2.5 text-[11px] font-bold text-white shadow-[0_6px_16px_rgba(230,57,70,0.25)] active:scale-95">
                     <LogIn size={13} />去登录
                   </button>

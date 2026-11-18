@@ -105,6 +105,20 @@ function normalizeRecordList(payload: unknown): RecordEntry[] {
   return list.map(normalizeRecord);
 }
 
+function persistLocalRecord(record: RecordEntry) {
+  try {
+    const raw = localStorage.getItem('trainingRecords');
+    const parsed = raw ? JSON.parse(raw) : [];
+    const records = Array.isArray(parsed) ? parsed : [];
+    const index = records.findIndex((item) => item?.date === record.date);
+    if (index >= 0) records[index] = record;
+    else records.unshift(record);
+    localStorage.setItem('trainingRecords', JSON.stringify(records));
+  } catch {
+    /* ignore */
+  }
+}
+
 function AddRecordModal({
   open,
   date,
@@ -309,7 +323,13 @@ function AddRecordModal({
   );
 }
 
-export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: RecordEntry) => void }) {
+export default function RecordPage({
+  isLoggedIn = true,
+  onAddRecord,
+}: {
+  isLoggedIn?: boolean;
+  onAddRecord?: (record: RecordEntry) => void;
+}) {
   const today = toKey(new Date());
   const [records, setRecords] = useState<Record<string, RecordEntry>>({});
   const [selectedDate, setSelectedDate] = useState(today);
@@ -334,6 +354,25 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
     setLoadError('');
     setRecords({});
 
+    // 游客记录只在本机，不请求后端。
+    if (!isLoggedIn) {
+      try {
+        const raw = localStorage.getItem('trainingRecords');
+        const parsed = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(parsed)
+          ? parsed
+              .filter((item) => item?.date >= from && item?.date <= to)
+              .map(normalizeRecord)
+          : [];
+        setRecords(Object.fromEntries(list.map((record) => [record.date, record])));
+      } catch {
+        setRecords({});
+      } finally {
+        setLoading(false);
+      }
+      return () => controller.abort();
+    }
+
     apiRequest<ApiRecord[] | { records: ApiRecord[] }>(
       `/users/me/training-records?from=${from}&to=${to}`,
       { signal: controller.signal },
@@ -351,7 +390,7 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
       });
 
     return () => controller.abort();
-  }, [viewYear, viewMonth, refreshKey]);
+  }, [viewYear, viewMonth, refreshKey, isLoggedIn]);
 
   const calendar = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1);
@@ -386,6 +425,24 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
   const addRecord = async (record: RecordEntry) => {
     setSaving(true);
     setSaveError('');
+
+    const existing = records[record.date];
+    const localRecord: RecordEntry = {
+      ...record,
+      id: existing?.id ?? uid('record'),
+      actions: [...(existing?.actions ?? []), ...record.actions],
+    };
+
+    if (!isLoggedIn) {
+      persistLocalRecord(localRecord);
+      setRecords((current) => ({ ...current, [record.date]: localRecord }));
+      setSelectedDate(record.date);
+      setModalOpen(false);
+      onAddRecord?.(localRecord);
+      setSaving(false);
+      return;
+    }
+
     try {
       const saved = await apiRequest<ApiRecord | { record: ApiRecord } | undefined>('/users/me/training-records', {
         method: 'POST',
@@ -399,13 +456,18 @@ export default function RecordPage({ onAddRecord }: { onAddRecord?: (record: Rec
         saved && typeof saved === 'object' && 'record' in saved
           ? saved.record
           : saved;
-      const nextRecord = normalizeRecord(rawRecord ?? record);
+      const nextRecord = normalizeRecord(rawRecord ?? localRecord);
       setRecords((current) => ({ ...current, [nextRecord.date]: nextRecord }));
       setSelectedDate(nextRecord.date);
       setModalOpen(false);
       onAddRecord?.(nextRecord);
-    } catch (error) {
-      setSaveError(getErrorMessage(error) || '保存记录失败，请稍后重试');
+    } catch {
+      // 后端断开时保留本机记录，用户仍可继续使用。
+      persistLocalRecord(localRecord);
+      setRecords((current) => ({ ...current, [record.date]: localRecord }));
+      setSelectedDate(record.date);
+      setModalOpen(false);
+      onAddRecord?.(localRecord);
     } finally {
       setSaving(false);
     }
