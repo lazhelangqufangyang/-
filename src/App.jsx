@@ -5,19 +5,20 @@ import { buildFramework } from './engine/week.js';
 import { addPlannedSet, buildSheet, cutPlannedSet, moveSlot, swapSlotExercise, toggleDropSet, wantAreasOf } from './engine/day.js';
 import { buildWeekPlan, fwForWeek, mondayOf, planKey } from './engine/weekplan.js';
 import { todayIso, weekdayOf } from './engine/time.js';
-import Onboarding from './ui/Onboarding.jsx';
-import TrainingHome from './ui/TrainingHome.jsx';
-import SettingsView from './ui/SettingsView.jsx';
-import DietView from './ui/DietView.jsx';
-import MovePick from './ui/MovePick.jsx';
-import PlanPick from './ui/PlanPick.jsx';
-import Welcome from './ui/Welcome.jsx';
-import Splash from './ui/Splash.jsx';
-import WorkoutPage from './components/WorkoutPage';
-import RewardModal from './components/RewardModal';
-import RecordPage from './components/RecordPage';
-import ProfilePage from './components/ProfilePage';
-import ExercisePickerPage from './components/ExercisePickerPage';
+import { byId } from './engine/exercises.js';
+// 一级页面都在 pages/，可复用组件在 components/，业务引擎在 engine/
+import WelcomePage from './pages/WelcomePage.jsx';
+import SplashPage from './pages/SplashPage.jsx';
+import OnboardingPage from './pages/OnboardingPage.jsx';
+import TrainingPage from './pages/TrainingPage.jsx';
+import SessionPage from './pages/SessionPage.jsx';
+import RecordPage from './pages/RecordPage.jsx';
+import DietPage from './pages/DietPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
+import ProfilePage from './pages/ProfilePage';
+import MovesPage from './pages/MovesPage';
+import PickPage from './pages/PickPage.jsx';
+import PlanPage from './pages/PlanPage.jsx';
 import { pickUpTokenFromHash, sessionToken } from './api/account.js';
 import { weekdayName } from './engine/goals.js';
 const NAV_TABS = [
@@ -104,7 +105,7 @@ function normalize(hash, onboarded) {
 export default function App() {
     const [splash, setSplash] = useState(true);
     return (<>
-      {splash ? <Splash onEnter={() => setSplash(false)} /> : null}
+      {splash ? <SplashPage onEnter={() => setSplash(false)} /> : null}
       <AppInner />
     </>);
 }
@@ -124,9 +125,6 @@ function AppInner() {
     const tabRef = useRef(tabOfRoute(route));
     /** 记一条运动时，动作要去「动作」页挑；这里存着还没提交的那一条 */
     const [recPick, setRecPick] = useState(null);
-    /** 训练完成后由新 WorkoutPage 触发，奖励弹窗挂在 App 根节点 */
-    const [rewardOpen, setRewardOpen] = useState(false);
-    const [rewardBadge, setRewardBadge] = useState(null);
     useEffect(() => {
         const onHash = () => {
             const next = normalize(window.location.hash, state.onboardingDone || isLoggedIn);
@@ -295,10 +293,15 @@ function AppInner() {
     const startDirect = useCallback(() => {
         setState((s) => {
             const cur = s.sheets.find((x) => x.date === today) ?? null;
-            if (cur && s.setLogs.some((l) => l.sheetId === cur.id))
-                return s;
+            const picks = s.pickedDate === today ? s.picked : [];
+            const logged = cur ? s.setLogs.some((l) => l.sheetId === cur.id) : false;
+            // 已经记过组的表不重建（重建会换 sheetId，上午记的组就找不到家了），只把新点的动作接在表尾
+            if (cur && logged) {
+                const merged = withPickedExtras(cur, picks, s.profile, s.setLogs, s.activityLogs, today);
+                return merged === cur ? s : { ...s, sheets: s.sheets.map((x) => (x.date === today ? merged : x)) };
+            }
             const next = buildSheet(s.profile, null, { totalMinutes: null, wantArea: null, wantAreas: [], direct: true }, s.setLogs, today, {
-                picked: s.pickedDate === today ? s.picked : [],
+                picked: picks,
                 acts: s.activityLogs,
                 skipped: []
             });
@@ -354,10 +357,18 @@ function AppInner() {
         upsertSheet(next);
     }, [sheet, state.framework, state.weekPlan, state.profile, state.setLogs, state.activityLogs, pickedToday, upsertSheet]);
     const startWorkout = useCallback(() => {
+        setState((s) => {
+            const cur = s.sheets.find((x) => x.date === today) ?? null;
+            if (!cur)
+                return s;
+            // 表上还是原来的框架动作时，把「本次训练」点进来的动作补进去，开始训练就能看到
+            const merged = withPickedExtras(cur, s.pickedDate === today ? s.picked : [], s.profile, s.setLogs, s.activityLogs, today);
+            return merged === cur ? s : { ...s, sheets: s.sheets.map((x) => (x.date === today ? merged : x)) };
+        });
         if (!sheet)
             generateToday({ totalMinutes: null, wantArea: null, wantAreas: [] }, []);
         go('#/session');
-    }, [sheet, generateToday, go]);
+    }, [sheet, generateToday, go, today]);
     /**
      * 「动作」页点「＋今天」：只改今天，换天自动作废。已有的表如果没有记录就立刻重排，
      * 已经有记录就不动它，免得你标过的组被新的 slotId 冲掉。
@@ -377,7 +388,11 @@ function AppInner() {
                         skipped: x.skipped
                     })
                     : x)
-                : s.sheets;
+                : todaySheet
+                    ? s.sheets.map((x) => (x.date === today
+                        ? withPickedExtras(withoutUnpickedExtras(x, next), next, s.profile, s.setLogs, s.activityLogs, today)
+                        : x))
+                    : s.sheets;
             return { ...s, picked: next, pickedDate: today, sheets };
         });
     }, [today]);
@@ -414,11 +429,11 @@ function AppInner() {
     /** 挑完回记录页；清空是提交那条记录之后做的 */
     const endRecPick = useCallback(() => go('#/log'), [go]);
     const clearRecPick = useCallback(() => setRecPick(null), []);
-    /** 训练保存成功后打开奖励弹窗；徽章信息由后端保存接口返回 */
-    const handleCompleteTraining = useCallback((record) => {
-        setRewardBadge(record?.badge ?? null);
-        setRewardOpen(true);
-    }, []);
+    /** 记录页里「记下」一条：先落库，再把这次挑选清干净，下次进来自动回到日历而不是添加入口 */
+    const addActivityFromLog = useCallback((a) => {
+        addActivity(a);
+        clearRecPick();
+    }, [addActivity, clearRecPick]);
     /** 没有真实登录接口时，用本地标记模拟登录，便于测试游客/登录两种状态 */
     const mockLogin = useCallback(() => {
         try {
@@ -440,6 +455,10 @@ function AppInner() {
     }, []);
     const removeActivity = useCallback((id) => {
         setState((s) => ({ ...s, activityLogs: s.activityLogs.filter((x) => x.id !== id) }));
+    }, []);
+    /** 记录页左滑删掉一条按组记录：只清这一天这个动作的组，不动别的 */
+    const removeExercise = useCallback((date, exId) => {
+        setState((s) => ({ ...s, setLogs: s.setLogs.filter((l) => !(l.date === date && l.exId === exId)) }));
     }, []);
     /** 删掉这天的记录：按组记的组和自己记的运动一起清掉，那张表本身留着 */
     const removeDayLogs = useCallback((date) => {
@@ -463,14 +482,14 @@ function AppInner() {
         window.location.hash = target;
     }, []);
     if (route === 'welcome') {
-        return <Welcome onDirect={chooseDirect} onPlan={choosePlan}/>;
+        return <WelcomePage onDirect={chooseDirect} onPlan={choosePlan}/>;
     }
     if (route === 'setup') {
-        return <Onboarding initial={state.profile} settings={state.settings} favorites={state.favorites} editing={false} onDone={finishOnboarding}/>;
+        return <OnboardingPage initial={state.profile} settings={state.settings} favorites={state.favorites} editing={false} onDone={finishOnboarding}/>;
     }
     // 「我的档案」搬进设置了，但它本身是整屏的分步表单，跟训练执行页一样不套底部导航
     if (route === 'settings/profile') {
-        return (<Onboarding initial={state.profile} settings={state.settings} favorites={state.favorites} editing onExit={() => go('#/settings')} onDone={(profile, _goal, framework) => {
+        return (<OnboardingPage initial={state.profile} settings={state.settings} favorites={state.favorites} editing onExit={() => go('#/settings')} onDone={(profile, _goal, framework) => {
                 setState((s) => ({ ...s, profile, framework: framework ?? null }));
                 go('#/settings');
             }}/>);
@@ -482,7 +501,7 @@ function AppInner() {
         ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
         : null;
     return (<div className="app">
-      {route === 'session' ? (<WorkoutPage isLoggedIn={isLoggedIn} onCompleteTraining={handleCompleteTraining}/>) : route === 'pick' ? (<MovePick profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPick framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
+      {route === 'session' ? (<SessionPage sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoPick={openPick}/>) : route === 'pick' ? (<PickPage profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPage framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
           {!isBarePage && (<header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
@@ -495,13 +514,13 @@ function AppInner() {
             </div>
           </header>)}
           <main className="screen" style={isBarePage ? { padding: 0, maxWidth: 'none' } : undefined}>
-            {tab === 'train' ? (<TrainingHome profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
-            {tab === 'moves' ? (<ExercisePickerPage/>) : null}
-            {tab === 'log' ? (<RecordPage isLoggedIn={isLoggedIn}/>) : null}
-            {tab === 'diet' ? (<DietView profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
+            {tab === 'train' ? (<TrainingPage profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
+            {tab === 'moves' ? (<MovesPage picked={pickedToday} onTogglePick={togglePick}/>) : null}
+            {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')}/>) : null}
+            {tab === 'diet' ? (<DietPage profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (route === 'settings'
                 ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)}/>
-                : (<SettingsView state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
+                : (<SettingsPage state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">
             {NAV_TABS.map((t) => (<button key={t.href} aria-current={tab === t.href.replace('#/', '') ? 'page' : undefined} onClick={() => go(t.href)}>
@@ -510,10 +529,45 @@ function AppInner() {
               </button>))}
           </nav>
         </>)}
-      <RewardModal open={rewardOpen} onClose={() => { setRewardOpen(false); setRewardBadge(null); }} badgeId={rewardBadge?.id} badgeName={rewardBadge?.name}/>
     </div>);
 }
 /** 选了「今天自由练」或「直接开始使用」都不把周框架交给引擎：这一张表现排，框架本身不动 */
 function fwForInput(fw, input) {
     return input.free || input.direct ? null : fw;
+}
+/**
+ * 把「本次训练」里点了、但今天这张表上还没有的动作接在表尾。
+ * 只加行、不重建：重建会换 slotId，已经记过的组就找不到家了。
+ */
+function withPickedExtras(sheet, pickedIds, profile, logs, acts, today) {
+    if (!sheet || !pickedIds?.length)
+        return sheet;
+    const have = new Set(sheet.slots.map((s) => s.exId).filter(Boolean));
+    const missing = [...new Set(pickedIds)].filter((id) => !have.has(id) && byId(id));
+    if (!missing.length)
+        return sheet;
+    const filler = buildSheet(profile, null, { totalMinutes: null, wantArea: null, wantAreas: [], direct: true }, logs, today, {
+        picked: missing,
+        acts,
+        skipped: []
+    });
+    const extras = filler.slots
+        .filter((s) => s.exId && s.kind !== 'warmupGeneral' && s.kind !== 'warmupMobility' && s.kind !== 'cooldown')
+        .map((s) => ({ ...s, id: `extra-${s.exId}` }));
+    if (!extras.length)
+        return sheet;
+    // 插在「放松」前面：拉伸还是留在最后一行
+    const cool = sheet.slots.findIndex((s) => s.kind === 'cooldown');
+    const slots = cool < 0
+        ? [...sheet.slots, ...extras]
+        : [...sheet.slots.slice(0, cool), ...extras, ...sheet.slots.slice(cool)];
+    // 有氧/器械不符这类「为什么没排进来」的说明也带上，执行页能点开看
+    const flags = [...new Set([...(sheet.flags ?? []), ...(filler.flags ?? [])])];
+    return { ...sheet, slots, flags };
+}
+/** 取消勾选的动作：只撤掉它自己补进来的那几行，框架原有的行不动 */
+function withoutUnpickedExtras(sheet, pickedIds) {
+    const keep = new Set(pickedIds);
+    const slots = sheet.slots.filter((s) => !String(s.id).startsWith('extra-') || keep.has(s.exId));
+    return slots.length === sheet.slots.length ? sheet : { ...sheet, slots };
 }

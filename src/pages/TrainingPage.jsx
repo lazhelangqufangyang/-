@@ -4,7 +4,7 @@ import { isHomeMode } from '../engine/load.js';
 import { weekdayName } from '../engine/goals.js';
 import { todayIso, weekdayOf } from '../engine/time.js';
 import { mondayOf, weekDates } from '../engine/weekplan.js';
-import Timeline from './Timeline.jsx';
+import Timeline from '../components/Timeline.jsx';
 import '../training.css';
 
 const MODE_KEY = 'fitplan.trainMode';
@@ -351,7 +351,7 @@ function FreeMode({ profile, logs, favorites, picked, onTogglePick, onStartDirec
     </div>);
 }
 
-export default function TrainingHome({
+export default function TrainingPage({
     profile,
     sheet,
     weekPlan,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { exportJson, parseImported, STORAGE_KEY } from '../store.js';
 import { apiBaseCustom, apiBaseLabel, loginBadge, sessionToken, setApiBase } from '../api/account.js';
 import { clearCloudRecords, countLines, pullRecords, pushRecords, receiptText } from '../api/records.js';
-import AccountCard from './AccountCard.jsx';
+import AccountCard from '../components/AccountCard.jsx';
 /** 设置里的模块：一个模块一个按钮，点进去是一个子页面 */
 const MODULES = [
     { key: 'profile', href: '#/settings/profile', title: '我的档案', desc: '身体数据、一周练哪几天、想练成什么样；也可以不设目标自由练', ico: '☺' },
@@ -10,7 +10,7 @@ const MODULES = [
     { key: 'data', href: '#/settings/data', title: '数据与备份', desc: '导出 JSON、导入 JSON、云端整份备份和拉回、清空本机数据', ico: '≣' },
     { key: 'safety', href: '#/settings/safety', title: '安全边界', desc: '这个应用不做什么：不诊断、不冲极限、不断食', ico: '⚠' }
 ];
-export default function SettingsView({ state, sub, onGo, onSave, onImport }) {
+export default function SettingsPage({ state, sub, onGo, onSave, onImport }) {
     const [badge, setBadge] = useState('');
     // 只在模块列表页问一次登录状态；子页面里 AccountCard 自己会读
     useEffect(() => {

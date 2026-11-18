@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { wishToGoal } from '../engine/goals.js';
 import { buildFramework } from '../engine/week.js';
 import { goalFromWishViaAI, goalFromReferenceViaAI } from '../ai.js';
-import Ruler from './Ruler.jsx';
+import Ruler from '../components/Ruler.jsx';
 const STEPS = ['身体数据', '想练成什么样'];
 function num(v) {
     if (v.trim() === '')

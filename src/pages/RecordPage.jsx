@@ -3,7 +3,7 @@ import { todayIso, uid } from '../engine/time.js';
 import { buildEntries, daySquares, weeksToCover } from '../engine/logbook.js';
 import { AREA_OPTIONS } from '../engine/areas.js';
 import { byId } from '../engine/exercises.js';
-import EffortSlider from './EffortSlider.jsx';
+import EffortSlider from '../components/EffortSlider.jsx';
 import './logbook.css';
 
 /**
@@ -300,7 +300,7 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
     </div>);
 }
 
-export default function LogbookView({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onAdd, onRemove, onRemoveExercise, onGoToday }) {
+export default function RecordPage({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onAdd, onRemove, onRemoveExercise, onGoToday }) {
     const today = todayIso();
     const realEntries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
     const [demoActions, setDemoActions] = useState(MOCK_ACTIONS);

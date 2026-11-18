@@ -38,8 +38,11 @@ npm run preview   # http://localhost:8082
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/` | 前端，React 19 + Vite 8，JavaScript |
+| `src/` | 前端入口：`main.jsx`（挂载）、`App.jsx`（哈希路由 + 底部五个 Tab）、`store.js`（本机存档） |
+| `src/pages/` | 一级页面，一个页面一个文件：`TrainingPage`（运动）、`SessionPage`（执行）、`RecordPage`（记录）、`MovesPage`（动作）、`DietPage`（饮食）、`ProfilePage` / `SettingsPage`（个人）、`PlanPage`（选部位出表）、`PickPage`（挑动作）、`WelcomePage` / `OnboardingPage` / `SplashPage` |
+| `src/components/` | 页面里复用的组件：`Timeline`、`MoveDetail`、`MoveAnim`、`Ruler`、`EffortSlider`、`MatchaPowderReveal`、`AccountCard`、`PersonalRecord`，以及 `profile/` 下的底部弹层与账号设置 |
 | `src/engine/` | 排课、重量推算、记录汇总、饮食估算、体重腰围走势，全部是纯函数 |
+| `src/api/` | 后端接口：登录令牌、会话、训练记录同步 |
 | `src/videoSeed.js` | 动作 → 示范视频链接 |
 | `qa/` | 46 组场景、273 条断言，跑的是 `src/engine/` |
 | `server/schema.sql` | 云端十张表的 DDL |

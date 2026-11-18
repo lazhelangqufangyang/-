@@ -17,7 +17,7 @@ import { loadLabel, roundLoad, suggestWeight } from '../src/engine/load.js';
 import { baselineAdvice } from '../src/engine/lifestyle.js';
 import { applyDirective, describe, isEmpty, parseByRule } from '../src/engine/tweak.js';
 import { RPE_LABELS, RPE_STEPS, RPE_TOP, isRpe, rpeAt, rpeIndex, rpeLabel } from '../src/engine/rpe.js';
-import { EFFORT_TONES } from '../src/ui/effortMotion.js';
+import { EFFORT_TONES } from '../src/components/effortMotion.js';
 import { buildWeekPlan, fwForWeek, mondayOf, moveDay, setDayExercises, weekDates } from '../src/engine/weekplan.js';
 /** 浏览器才有的东西，Node 里给它一个内存版，否则存档那一层的往返测不了 */
 if (!('localStorage' in globalThis)) {

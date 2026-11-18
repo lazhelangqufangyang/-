@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { Swiper as SwiperType } from 'swiper';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCoverflow } from 'swiper/modules';
-import { ChevronRight, Dumbbell, Search, X } from 'lucide-react';
+import { Check, ChevronRight, Dumbbell, Plus, Search, X } from 'lucide-react';
 import { BROWSE_AREAS, EXERCISES } from '../engine/exercises.js';
 import 'swiper/css';
 import 'swiper/css/effect-coverflow';
@@ -154,10 +154,12 @@ const PARTS: TrainingPart[] = PART_DEFS.map((part) => ({
   actions: actionsFor(part.keys, part.all),
 }));
 
-export default function ExercisePickerPage({
-  onSelectExercise,
+export default function MovesPage({
+  picked = [],
+  onTogglePick,
 }: {
-  onSelectExercise?: (exercise: Exercise) => void;
+  picked?: string[];
+  onTogglePick?: (exerciseId: string) => void;
 }) {
   const swiperRef = useRef<SwiperType | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -326,22 +328,37 @@ export default function ExercisePickerPage({
             </div>
 
             <div className="mt-3 space-y-2">
-              {filteredActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => onSelectExercise?.(action)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3.5 text-left shadow-sm transition-all hover:border-[#E63946]/20 hover:shadow-md active:scale-[0.99]"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-gray-800">{action.name}</span>
-                    <span className="mt-0.5 block truncate text-[10px] font-medium text-gray-400">
-                      {action.muscle} · {action.equipment}
+              {filteredActions.map((action) => {
+                const on = picked.includes(action.id);
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => onTogglePick?.(action.id)}
+                    aria-pressed={on}
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left shadow-sm transition-all active:scale-[0.99] ${
+                      on
+                        ? 'border-[#E63946]/40 bg-[#E63946]/[0.04]'
+                        : 'border-gray-100 bg-white hover:border-[#E63946]/20 hover:shadow-md'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-gray-800">{action.name}</span>
+                      <span className="mt-0.5 block truncate text-[10px] font-medium text-gray-400">
+                        {action.muscle} · {action.equipment}
+                      </span>
                     </span>
-                  </span>
-                  <ChevronRight size={17} className="shrink-0 text-gray-300" />
-                </button>
-              ))}
+                    <span
+                      className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-bold ${
+                        on ? 'bg-[#E63946] text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {on ? <Check size={12} strokeWidth={3} /> : <Plus size={12} strokeWidth={3} />}
+                      {on ? '已加入' : '加进今天'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {!filteredActions.length && (

@@ -896,3 +896,187 @@ body:has(.sess-page)::after {
     transition: none;
   }
 }
+
+/* ============================================================
+   视觉升级：深色训练头 + 浮起卡片 + 更醒目的进度
+   ============================================================ */
+.sess-page {
+  background: #f2f3f7;
+  --sess-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+}
+
+body:has(.sess-page)::before {
+  background-image: none;
+  background-color: #f2f3f7;
+}
+
+.sess-head {
+  position: relative;
+  width: calc(100% - 24px);
+  max-width: 748px;
+  margin: 12px auto 0;
+  padding: 18px 18px 24px;
+  border-radius: 26px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(120% 120% at 108% -12%, rgba(255, 74, 92, 0.55) 0%, rgba(255, 74, 92, 0) 58%),
+    linear-gradient(155deg, #1a1d26 0%, #242936 52%, #15171e 100%);
+  box-shadow: 0 18px 40px rgba(12, 16, 26, 0.24);
+}
+
+.sess-head::after {
+  content: '';
+  position: absolute;
+  right: -70px;
+  bottom: -120px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(230, 57, 70, 0.5), rgba(230, 57, 70, 0) 70%);
+  pointer-events: none;
+}
+
+.sess-exit {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f4f7;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.sess-live {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sess-live i {
+  background: #ff4757;
+  box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.18);
+}
+
+.sess-head h1 {
+  position: relative;
+  z-index: 1;
+  margin-top: 14px;
+  color: #fff;
+  font-size: 26px;
+  letter-spacing: -0.6px;
+}
+
+.sess-head-meta {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+}
+
+.sess-head-meta b {
+  color: #ff8b96;
+}
+
+.sess-body {
+  padding: 14px 14px 26px;
+}
+
+.sess-card {
+  border: 0;
+  border-radius: 22px;
+  box-shadow: var(--sess-shadow);
+}
+
+.sess-card-index {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #ff7079 0%, #e63946 100%);
+  box-shadow: 0 6px 14px rgba(230, 57, 70, 0.28);
+}
+
+.sess-card-title h2 {
+  font-size: 18px;
+}
+
+.sess-set {
+  border: 0;
+  background: #f6f7fa;
+}
+
+.sess-set.done {
+  background: #eef8f2;
+}
+
+.sess-set.open {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #f5d3d8;
+}
+
+.sess-live-dock {
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+}
+
+.sess-continue {
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff5f6d 0%, #e63946 100%);
+}
+
+.sess-finish {
+  border-radius: 22px;
+}
+
+.sess-card-done {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e8f6ee;
+  color: #1f8a51;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.sess-card.finished .sess-card-index {
+  background: linear-gradient(135deg, #43c47c 0%, #1f8a51 100%);
+  box-shadow: 0 6px 14px rgba(31, 138, 81, 0.24);
+  font-size: 13px;
+}
+
+.sess-notes {
+  margin: 0 0 12px;
+  padding: 10px 13px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.sess-notes summary {
+  list-style: none;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.sess-notes summary::-webkit-details-marker {
+  display: none;
+}
+
+.sess-notes ul {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+
+.sess-notes li {
+  margin-top: 4px;
+  color: #8a909b;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+@media (max-width: 374px) {
+  .sess-head {
+    width: calc(100% - 16px);
+    padding: 16px 14px 20px;
+    border-radius: 22px;
+  }
+}

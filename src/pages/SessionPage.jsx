@@ -4,8 +4,8 @@ import { byId, swapCandidates } from '../engine/exercises.js';
 import { dropStepPlan, hasDropSet } from '../engine/day.js';
 import { injuryAreas, loadInputName, loadLabel } from '../engine/load.js';
 import { swapAdvice } from '../ai.js';
-import EffortSlider from './EffortSlider.jsx';
-import { MatchaPowderReveal } from './MatchaPowderReveal';
+import EffortSlider from '../components/EffortSlider.jsx';
+import { MatchaPowderReveal } from '../components/MatchaPowderReveal';
 import './session.css';
 import './matcha-reward.css';
 
@@ -46,7 +46,7 @@ function setData(slot, p, rec) {
     return { weight: slot.unit === '无' ? '' : loadLabel(slot.unit, weight ?? null), reps, rpe };
 }
 
-export default function SessionView({ sheet, profile, settings, logs, onSwap, onSkip, onAddSet, onCutSet, onDropSet, onAddLogs, onExit, onGoPick }) {
+export default function SessionPage({ sheet, profile, settings, logs, onSwap, onSkip, onAddSet, onCutSet, onDropSet, onAddLogs, onExit, onGoPick }) {
     const [openKey, setOpenKey] = useState(null);
     const [draftWeight, setDraftWeight] = useState('');
     const [draftReps, setDraftReps] = useState('');
@@ -209,14 +209,25 @@ export default function SessionView({ sheet, profile, settings, logs, onSwap, on
       </header>
 
       <main className="sess-body">
+        {sheet.flags?.length ? (<details className="sess-notes">
+          <summary>这张表有 {sheet.flags.length} 条说明 · 点开看</summary>
+          <ul>
+            {sheet.flags.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+        </details>) : null}
         {activeSlots.map((slot, order) => {
             const isLift = slot.setPlan.length > 0;
-            return (<article className="sess-card" key={slot.id}>
+            const doneCount = isLift ? slot.setPlan.filter((_, i) => logMap.has(setKey(slot.id, i))).length : 0;
+            const finishedThis = isLift && doneCount >= slot.setPlan.length;
+            return (<article className={`sess-card${finishedThis ? ' finished' : ''}`} key={slot.id}>
               <div className="sess-card-head">
-                <span className="sess-card-index num">{order + 1}</span>
+                <span className="sess-card-index num">{finishedThis ? '✓' : order + 1}</span>
                 <div className="sess-card-title">
                   <h2>{slot.name}</h2>
-                  <p className="num">{isLift ? summaryOf(slot) : `约 ${Math.round(slot.durationSec / 60)} 分钟`}</p>
+                  <p className="num">
+                    {isLift ? summaryOf(slot) : `约 ${Math.round(slot.durationSec / 60)} 分钟`}
+                    {isLift && doneCount ? <em className="sess-card-done">已做 {doneCount}/{slot.setPlan.length} 组</em> : null}
+                  </p>
                 </div>
                 <button type="button" className="sess-remove" onClick={() => onSkip(slot.id)} aria-label="今天不练这个动作">×</button>
               </div>

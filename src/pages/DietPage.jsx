@@ -44,7 +44,7 @@ function CapBar({ label, value, target, unit }) {
       </span>
     </div>);
 }
-export default function DietView({ profile, meals, onAdd, onRemove, onGoToday, onGoProfile }) {
+export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, onGoProfile }) {
     const today = todayIso();
     const targets = useMemo(() => dietTargets(profile), [profile]);
     const macros = useMemo(() => macroTargets(targets), [targets]);

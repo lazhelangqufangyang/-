@@ -21,10 +21,10 @@ import {
 } from 'lucide-react';
 import { apiRequest, isBackendUnavailable, isUnauthorized } from '../api/client';
 import { logOut, sessionToken, setSessionToken } from '../api/account.js';
-import PersonalRecord from './PersonalRecord';
-import BottomSheet from './profile/BottomSheet';
-import LogoutConfirmDialog from './profile/LogoutConfirmDialog';
-import ProfileSettingsSheet from './profile/ProfileSettingsSheet';
+import PersonalRecord from '../components/PersonalRecord';
+import BottomSheet from '../components/profile/BottomSheet';
+import LogoutConfirmDialog from '../components/profile/LogoutConfirmDialog';
+import ProfileSettingsSheet from '../components/profile/ProfileSettingsSheet';
 import {
   clearOverviewCache,
   formatSyncedAt,
@@ -32,14 +32,14 @@ import {
   readSyncPreference,
   writeOverviewCache,
   writeSyncPreference,
-} from './profile/profileStorage';
+} from '../components/profile/profileStorage';
 import type {
   BadgesPayload,
   EarnedBadge,
   SettingsModule,
   SyncPhase,
   UserProfile,
-} from './profile/profileTypes';
+} from '../components/profile/profileTypes';
 
 type ProfilePageProps = {
   isLoggedIn?: boolean;

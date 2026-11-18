@@ -45,7 +45,7 @@ function Icon({ name, size = 18 }) {
 }
 
 /** 没有安排时先选练哪里，选完直接出表；按周框架还是自由练也在这一步定 */
-export default function PlanPick({ framework, wantAreas, todayFocus, free, onBack, onGenerate }) {
+export default function PlanPage({ framework, wantAreas, todayFocus, free, onBack, onGenerate }) {
     const initial = useMemo(() => inferAreas(wantAreas, todayFocus), [wantAreas, todayFocus]);
     const [sel, setSel] = useState(initial);
     const [isFree, setIsFree] = useState(free || !framework);
