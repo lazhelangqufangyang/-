@@ -614,7 +614,9 @@ fw, input, logs, date, opts = {}) {
     // 你点进来的动作、你选的部位一律留在表上：要腾时间只收框架顺带的孤立、辅助动作，
     // 收完还是超就让它超——表长一点，比少了你要练的那一行有用
     const pickedIds = new Set(picks.list.map((ex) => ex.id));
-    const protect = (s) => improvised ? Boolean(s.exId) : pickedIds.has(s.exId ?? '') || hitsAnyArea(byId(s.exId ?? ''), wants);
+    // 往已有的表里加动作时，把原来那些行也一并保住：加两个动作不该把已经排好的三个动作挤掉
+    const keepIds = new Set([...(opts.protectIds ?? []), ...pickedIds]);
+    const protect = (s) => improvised ? Boolean(s.exId) : keepIds.has(s.exId ?? '') || hitsAnyArea(byId(s.exId ?? ''), wants);
     const fitted = fitToTotal(slots, totalSec, dropped, protect);
     const laid = layout(fitted);
     return {

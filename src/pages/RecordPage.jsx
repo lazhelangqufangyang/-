@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { todayIso, uid } from '../engine/time.js';
-import { buildEntries, daySquares, weeksToCover } from '../engine/logbook.js';
+import { buildEntries, daySquares, partOf, weeksToCover } from '../engine/logbook.js';
 import { AREA_OPTIONS } from '../engine/areas.js';
 import { byId } from '../engine/exercises.js';
 import EffortSlider from '../components/EffortSlider.jsx';
@@ -96,6 +96,22 @@ function actionsOf(entry, demoActions) {
         });
     }
     for (const a of entry.activities) {
+        const exIds = (a.exIds ?? []).filter((id) => byId(id));
+        // 手记的一条里挑过动作：一个动作一行，部位按它自己的主要肌群算，别糊成一行「记录」
+        if (exIds.length) {
+            for (const id of exIds) {
+                const ex = byId(id);
+                actions.push({
+                    id: `act:${a.id}:${id}`,
+                    type: 'act',
+                    part: partOf(ex),
+                    title: ex?.name ?? id,
+                    core: a.minutes ? `${a.minutes} 分钟` : a.feel ? `RPE ${a.feel}` : '手动记录',
+                    actId: a.id
+                });
+            }
+            continue;
+        }
         const parts = a.parts?.length ? a.parts : [a.part ?? '其他'];
         for (const part of parts) {
             actions.push({
@@ -103,7 +119,7 @@ function actionsOf(entry, demoActions) {
                 type: 'act',
                 part,
                 title: a.name,
-                core: a.minutes ? `${a.minutes} 分钟` : '记录',
+                core: a.minutes ? `${a.minutes} 分钟` : a.feel ? `RPE ${a.feel}` : '手动记录',
                 actId: a.id
             });
         }
@@ -238,14 +254,14 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
         <button type="button" className="rec-add-back" onClick={onDone}>
           <span aria-hidden="true">‹</span> 返回
         </button>
-        <h1>添加记录</h1>
+        <h1>记一次训练</h1>
         <span className="rec-add-date num">{dayLabel(date)}</span>
       </header>
 
       <main className="rec-add-body">
         <div className="rec-add-section">
           <div className="rec-add-label">
-            <span>动作</span>
+            <span>练了什么动作</span>
             {recPicks.length ? <em>{recPicks.length} 个</em> : null}
           </div>
           {recPicks.length ? (<div className="rec-picked-chips">
@@ -258,17 +274,17 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
                 <path d="M4 9.5v5M7 7v10M17 7v10M20 9.5v5M7 12h10"/>
               </svg>
             </span>
-            <span>还没选动作</span>
+            <span>还没挑动作</span>
           </div>)}
           <button type="button" className="rec-pick-btn" onClick={() => onGoPick(date)}>
             <span className="rec-pick-plus">＋</span>
-            去「动作」页挑
-            {recPicks.length ? <span className="rec-pick-count">已选 {recPicks.length} 个</span> : null}
+            从动作库里挑动作
+            {recPicks.length ? <span className="rec-pick-count">已挑 {recPicks.length} 个</span> : null}
           </button>
         </div>
 
         <div className="rec-add-section">
-          <div className="rec-add-label"><span>练了哪里</span></div>
+          <div className="rec-add-label"><span>今天练了哪里</span></div>
           <div className="rec-area-chips">
             {AREA_OPTIONS.map((a) => (<button key={a} type="button" className={`rec-area-chip${areas.includes(a) ? ' on' : ''}`} aria-pressed={areas.includes(a)} onClick={() => toggleArea(a)}>
               {a}
@@ -279,7 +295,7 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
         <section className={`rec-acc${effortOpen ? ' open' : ''}`}>
           <button type="button" className="rec-acc-head" aria-expanded={effortOpen} onClick={() => setEffortOpen((v) => !v)}>
             <span className="rec-acc-caret" aria-hidden="true">▶</span>
-            <span>记录这组有多累（RPE）</span>
+            <span>这次有多累（RPE）</span>
             <b className="rec-acc-value num">{feel === null ? '未填' : `RPE ${feel}`}</b>
           </button>
           {effortOpen ? (<div className="rec-acc-panel">
@@ -294,13 +310,13 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
       </main>
 
       <div className="rec-add-foot">
-        <button type="button" className="rec-add-save" onClick={save}>记下</button>
-        <button type="button" className="rec-add-cancel" onClick={onDone}>返回</button>
+        <button type="button" className="rec-add-save" onClick={save}>保存</button>
+        <button type="button" className="rec-add-cancel" onClick={onDone}>取消</button>
       </div>
     </div>);
 }
 
-export default function RecordPage({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onAdd, onRemove, onRemoveExercise, onGoToday }) {
+export default function RecordPage({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onDismissPick, onAdd, onRemove, onRemoveExercise, onGoToday }) {
     const today = todayIso();
     const realEntries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
     const [demoActions, setDemoActions] = useState(MOCK_ACTIONS);
@@ -350,6 +366,7 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
     const closeAdd = () => {
         setAdding(false);
         onPickDone();
+        onDismissPick?.();
     };
     const selMonth = sel.slice(0, 7);
     return (<div className="logbook-page">
@@ -395,9 +412,9 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
       <div className="rec-bottom-space" aria-hidden="true"/>
       <div className="rec-dock">
         <button type="button" className="rec-dock-add" onClick={() => setAdding(true)}>
-          <span aria-hidden="true">＋</span>加运动
+          <span aria-hidden="true">＋</span>记一笔
         </button>
-        <button type="button" className="rec-dock-back" onClick={onGoToday}>回运动</button>
+        <button type="button" className="rec-dock-back" onClick={onGoToday}>回到训练</button>
       </div>
 
       {adding ? (<AddRecordPage date={sel} recPicks={recPick?.exIds ?? []} onGoPick={onStartPick} onTogglePick={onToggleRecPick} onAdd={onAdd} onDone={closeAdd}/>) : null}

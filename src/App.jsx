@@ -74,10 +74,10 @@ const ROUTES = ['train', 'moves', 'log', 'diet', 'settings', 'session', 'pick', 
 /** 设置里的模块，每个都是一个子页面 */
 const SETTINGS_MODULES = ['profile', 'account', 'data', 'safety'];
 const TITLES = {
-    train: '我的运动',
-    moves: '动作选择',
-    log: '运动记录',
-    diet: '饮食记录',
+    train: '训练',
+    moves: '动作库',
+    log: '训练记录',
+    diet: '饮食',
     settings: '个人',
     'settings/account': '账号',
     'settings/data': '数据与备份',
@@ -385,7 +385,8 @@ function AppInner() {
                         overrides: x.overrides,
                         picked: next,
                         acts: s.activityLogs,
-                        skipped: x.skipped
+                        skipped: x.skipped,
+                        protectIds: x.slots.map((sl) => sl.exId).filter(Boolean)
                     })
                     : x)
                 : todaySheet
@@ -515,15 +516,15 @@ function AppInner() {
           </header>)}
           <main className="screen" style={isBarePage ? { padding: 0, maxWidth: 'none' } : undefined}>
             {tab === 'train' ? (<TrainingPage profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
-            {tab === 'moves' ? (<MovesPage picked={pickedToday} onTogglePick={togglePick}/>) : null}
-            {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')}/>) : null}
+            {tab === 'moves' ? (<MovesPage picked={pickedToday} onTogglePick={togglePick} favorites={state.favorites} onToggleFavorite={toggleFavorite} recPicked={recPick ? recPick.exIds : null} recDate={recPick?.date ?? ''} onToggleRecPick={toggleRecPick} onFinishRecPick={endRecPick}/>) : null}
+            {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onDismissPick={clearRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')}/>) : null}
             {tab === 'diet' ? (<DietPage profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (route === 'settings'
                 ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)}/>
                 : (<SettingsPage state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">
-            {NAV_TABS.map((t) => (<button key={t.href} aria-current={tab === t.href.replace('#/', '') ? 'page' : undefined} onClick={() => go(t.href)}>
+            {NAV_TABS.map((t) => (<button key={t.href} aria-current={tab === t.href.replace('#/', '') ? 'page' : undefined} onClick={() => { clearRecPick(); go(t.href); }}>
                 <TabIco name={t.ico}/>
                 {t.label}
               </button>))}

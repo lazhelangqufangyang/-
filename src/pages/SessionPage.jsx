@@ -98,8 +98,8 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
     if (!sheet) {
         return (<div className="sess-page">
         <div className="sess-empty">
-          <h2>今天还没有训练清单</h2>
-          <button className="sess-primary" onClick={onExit}>回运动页</button>
+          <h2>今天还没排动作</h2>
+          <button className="sess-primary" onClick={onExit}>回到训练</button>
         </div>
       </div>);
     }
@@ -109,8 +109,8 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
           <button className="sess-exit" onClick={onExit}>‹ 退出</button>
         </header>
         <div className="sess-empty">
-          <h2>今天还没有选动作</h2>
-          <button className="sess-primary" onClick={onGoPick}>加动作</button>
+          <h2>今天还没挑动作</h2>
+          <button className="sess-primary" onClick={onGoPick}>去挑动作</button>
         </div>
       </div>);
     }
@@ -195,6 +195,14 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
         setAiBusy(false);
     };
     const title = `${sheet.input.direct ? '自选' : sheet.focus} · ${actionCount} 个动作`;
+    // 被时间预算砍掉的动作也算「说明」：不然用户只会觉得莫名其妙少了几个
+    const cuts = (sheet.dropped ?? []).filter((d) => d.includes('砍掉'));
+    const notes = [
+        ...(sheet.flags ?? []),
+        ...(sheet.dropped ?? []).map((d) => (d.includes('砍掉')
+            ? `砍掉了：${d.replace(/^有氧：/, '').replace(/\s*被砍掉.*$/, '')}`
+            : `时间压缩：${d}`))
+    ];
     return (<div className="sess-page">
       <header className="sess-head">
         <div className="sess-head-line">
@@ -204,22 +212,24 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
         <h1>{title}</h1>
         <div className="sess-head-meta num">
           <span>组进度 <b>{loggedSets}/{totalSets}</b></span>
-          <span>共 {activeSlots.length} 行</span>
+          <span>{liftCount} 个动作{activeSlots.length > liftCount ? ` · ${activeSlots.length - liftCount} 项热身放松` : ''}</span>
         </div>
       </header>
 
       <main className="sess-body">
-        {sheet.flags?.length ? (<details className="sess-notes">
-          <summary>这张表有 {sheet.flags.length} 条说明 · 点开看</summary>
+        {notes.length ? (<details className={`sess-notes${cuts.length ? ' has-drop' : ''}`}>
+          <summary>{cuts.length
+            ? `有 ${cuts.length} 个动作没排进来 · 点开看原因`
+            : `这张表有 ${notes.length} 条说明 · 点开看`}</summary>
           <ul>
-            {sheet.flags.map((f, i) => <li key={i}>{f}</li>)}
+            {notes.map((f, i) => <li key={i}>{f}</li>)}
           </ul>
         </details>) : null}
         {activeSlots.map((slot, order) => {
             const isLift = slot.setPlan.length > 0;
             const doneCount = isLift ? slot.setPlan.filter((_, i) => logMap.has(setKey(slot.id, i))).length : 0;
             const finishedThis = isLift && doneCount >= slot.setPlan.length;
-            return (<article className={`sess-card${finishedThis ? ' finished' : ''}`} key={slot.id}>
+            return (<article className={`sess-card${finishedThis ? ' finished' : ''}${isLift ? '' : ' sess-card-lite'}`} key={slot.id}>
               <div className="sess-card-head">
                 <span className="sess-card-index num">{finishedThis ? '✓' : order + 1}</span>
                 <div className="sess-card-title">
@@ -388,6 +398,7 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
       </div>
 
       {showReward && (<div className="matcha-reward-overlay" role="dialog" aria-modal="true" aria-label="训练完成奖励">
+        <button type="button" className="matcha-reward-close" aria-label="关掉奖励" onClick={() => { setShowReward(false); setShowBadge(false); onExit(); }}>×</button>
         <div className="matcha-reward-stage">
           <MatchaPowderReveal
             className="matcha-reward-motion"

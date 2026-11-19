@@ -1049,6 +1049,70 @@ body:has(.sess-page)::before {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
+/* 有动作被时间预算砍掉时，这条要显眼一点 */
+.sess-notes.has-drop {
+  background: #fffaf0;
+  box-shadow: 0 8px 20px rgba(180, 130, 20, 0.1);
+}
+
+.sess-notes.has-drop summary {
+  color: #96660a;
+}
+
+/* 热身 / 放松不是正式动作：压成一条，别把真正的训练挤到屏幕外 */
+.sess-card-lite {
+  padding: 12px 14px;
+  background: #fbfbfd;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+}
+
+.sess-card-lite .sess-card-index {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  color: #6b7280;
+  background: #eef0f4;
+  box-shadow: none;
+}
+
+.sess-card-lite .sess-card-title h2 {
+  font-size: 14.5px;
+}
+
+.sess-card-lite .sess-card-title p {
+  font-size: 10.5px;
+}
+
+.sess-card-lite .sess-block {
+  margin-top: 8px;
+}
+
+.sess-card-lite .sess-block p {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.matcha-reward-close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  right: 14px;
+  z-index: 40;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.matcha-reward-close:active {
+  background: rgba(255, 255, 255, 0.26);
+}
+
 .sess-notes summary {
   list-style: none;
   cursor: pointer;

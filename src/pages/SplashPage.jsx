@@ -120,7 +120,7 @@ export default function Splash({ onEnter }) {
           <p className="sp-eyebrow">LIAN · FITPLAN</p>
           <h1 className="sp-title">只有你能<br />让自己停下来</h1>
         </header>
-        <button className="sp-enter" onClick={enter}>开始训练<span aria-hidden="true">↗</span></button>
+        <button className="sp-enter" onClick={enter}>进入应用<span aria-hidden="true">↗</span></button>
       </div>
     </div>);
 }

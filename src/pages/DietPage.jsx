@@ -72,14 +72,14 @@ export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, o
       <div className="card">
         <h3>你的热量参考</h3>
         {targets.target === null ? (<>
-          <div className="sk" style={{ height: 34, width: 160 }}/>
-          <div className="sk" style={{ height: 14, width: 220, marginTop: 8 }}/>
-          <div className="sk" style={{ height: 14, width: 180, marginTop: 4 }}/>
+          <div className="dt-target">
+            <div className="dt-big num" style={{ fontSize: 19, letterSpacing: '-0.2px', color: '#6b7280' }}>还没算出参考热量</div>
+          </div>
           <div className="dt-bubble" onClick={onGoProfile}>
             <span className="dt-bubble-ico">✎</span>
             <span className="dt-bubble-text">
-              <b>立即完善档案</b>
-              <small>{targets.basis ?? '填上身高体重、性别和年龄，算出你的专属热量参考。'}</small>
+              <b>先补四个数</b>
+              <small>{targets.basis ?? '填上性别、年龄、身高、体重，就能算出你的专属热量参考。'}</small>
             </span>
             <span style={{ color: 'var(--accent-deep)', fontSize: 18 }}>›</span>
           </div>
@@ -171,7 +171,7 @@ export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, o
       {days.length === 0 ? (<div className="card">
           <h3>还没有吃的记录</h3>
           <button className="btn primary" onClick={onGoToday}>
-            回运动
+            回到训练
           </button>
         </div>) : null}
     </div>);

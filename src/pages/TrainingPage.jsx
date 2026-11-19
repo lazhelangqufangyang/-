@@ -171,28 +171,45 @@ function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip
     const day = weekPlan?.days?.[selected] ?? null;
     const ids = day?.exerciseIds ?? [];
     const visible = sheet ? sheet.slots.filter((x) => !sheet.skipped.includes(x.id)) : [];
-    const count = isToday ? (sheet ? visible.length : ids.length) : ids.length;
+    const lifts = visible.filter((x) => x.setPlan.length > 0);
+    const count = isToday ? (sheet ? lifts.length : ids.length) : ids.length;
     const sets = isToday && sheet
         ? visible.reduce((n, x) => n + x.setPlan.length, 0)
         : ids.reduce((n, id) => n + (byId(id)?.sets ?? 0), 0);
     const focus = (isToday ? sheet?.focus : null) || day?.focus || (isToday ? '自由安排' : '休息日');
-    return (<section className="plan-today">
-      <div className="plan-heading">
-        <div className="plan-title-wrap">
-          <span className="train-eyebrow">{isToday ? 'TODAY' : 'PLAN'}</span>
-          <h2>
-            {isToday ? '今日计划' : `${weekdayName(weekdayOf(selected))}的计划`}
-            <span className="plan-focus-inline">{focus}</span>
-          </h2>
+    // 只把“真被砍掉的动作”说出来；「某段热身减 1 分钟」这种细账别往脸上糊
+    const droppedCuts = isToday && sheet
+        ? (sheet.dropped ?? []).filter((d) => d.includes('砍掉')).map((d) => d.replace(/^有氧：/, '').replace(/\s*被砍掉.*$/, ''))
+        : [];
+    return (<section className={`plan-today${isToday ? ' is-today' : ''}`}>
+      <div className="plan-hero">
+        <div className="plan-heading">
+          <div className="plan-title-wrap">
+            <span className="train-eyebrow">{isToday ? 'TODAY' : 'PLAN'}</span>
+            <h2>
+              {isToday ? '今日计划' : `${weekdayName(weekdayOf(selected))}的计划`}
+              <span className="plan-focus-inline">{focus}</span>
+            </h2>
+          </div>
+          {isToday ? (<button type="button" className="adjust-link" onClick={onGoPlan}>
+              <Icon name="edit" size={14}/>
+              调整
+            </button>) : null}
         </div>
-        {isToday ? (<button type="button" className="adjust-link" onClick={onGoPlan}>
-            <Icon name="edit" size={14}/>
-            调整
-          </button>) : null}
-      </div>
-      <div className="plan-meta-line">
-        <span className="plan-count num">{count} 个动作 · {sets} 组</span>
-        {isToday ? <span className="mini-chip accent">今天</span> : <button type="button" className="mini-chip" onClick={() => onSelect(today)}>回到今天</button>}
+        <div className="plan-meta-line">
+          {isToday ? (<>
+            <span className="plan-stat"><b className="num">{count}</b> 个动作</span>
+            <span className="plan-stat"><b className="num">{sets}</b> 组</span>
+            {sheet ? <span className="plan-stat"><b className="num">{sheet.budgetMinutes ?? 45}</b> 分钟</span> : null}
+            <span className="mini-chip accent">今天</span>
+          </>) : (<>
+            <span className="plan-count num">{count} 个动作 · {sets} 组</span>
+            <button type="button" className="mini-chip" onClick={() => onSelect(today)}>回到今天</button>
+          </>)}
+        </div>
+        {droppedCuts.length ? (<p className="plan-dropped">
+            今天装不下，砍掉了：{droppedCuts.join('；')}
+          </p>) : null}
       </div>
       {isToday
         ? (sheet ? <Timeline sheet={sheet} profile={profile} onSkip={onSkip} onReorder={onReorder} minimal/> : <RestCard today/>)
@@ -232,7 +249,7 @@ function MoveCarousel({ title, subtitle, items, picked, onToggle, onGoMoves }) {
           <h2>{title}</h2>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <button type="button" className="text-btn" onClick={onGoMoves}>全部动作 <Icon name="chevron" size={13}/></button>
+        <button type="button" className="text-btn" onClick={onGoMoves}>动作库 <Icon name="chevron" size={13}/></button>
       </div>
       <div className="move-scroll">
         {items.map((ex) => {
@@ -260,7 +277,7 @@ function FreeHero({ onStart }) {
       <button type="button" className="free-start" onClick={onStart}>
         <span className="free-plus"><Icon name="plus" size={20}/></span>
         <span className="free-start-copy">
-          <b>快速开始空训练</b>
+          <b>直接开练</b>
           <small>不挑动作，先动起来</small>
         </span>
         <span className="free-start-arrow"><Icon name="arrow" size={18}/></span>
@@ -276,7 +293,7 @@ function FreeMode({ profile, logs, favorites, picked, onTogglePick, onStartDirec
     const quick = useMemo(() => quickExercises(logs, favorites), [logs, favorites]);
     const recent = useMemo(() => recentExercises(logs, 8), [logs]);
     const title = recent.length ? '经常练的动作' : favorites.length ? '收藏的动作' : '推荐动作';
-    const subtitle = recent.length ? '最近练过的，一点就加进今天' : favorites.length ? '你喜欢练的，一点就加进今天' : '从全身复合动作开始，比较不容易白练';
+    const subtitle = recent.length ? '最近练过的，点一下加入今天' : favorites.length ? '你收藏的动作，点一下加入今天' : '从全身复合动作开始，比较不容易白练';
 
     const tabs = [{ key: 'all', label: '全部' }, ...BROWSE_AREAS.map((a) => ({ key: a.key, label: a.title.replace('训练', '') }))];
     const list = useMemo(() => {
@@ -291,14 +308,14 @@ function FreeMode({ profile, logs, favorites, picked, onTogglePick, onStartDirec
 
       {picked.length ? (<div className="current-picks">
         <div className="current-picks-head">
-          <b>本次训练</b>
+          <b>今天要练的</b>
           <span className="num">{picked.length} 个动作</span>
         </div>
         <div className="picked-chips">
           {picked.map((id) => {
               const ex = byId(id);
               if (!ex) return null;
-              return (<button key={id} type="button" className="picked-chip" onClick={() => onTogglePick(id)} aria-label={`从本次训练去掉 ${ex.name}`}>
+              return (<button key={id} type="button" className="picked-chip" onClick={() => onTogglePick(id)} aria-label={`从今天去掉 ${ex.name}`}>
                 {ex.name}<Icon name="plus" size={12} className="picked-x"/>
               </button>);
           })}
@@ -310,8 +327,8 @@ function FreeMode({ profile, logs, favorites, picked, onTogglePick, onStartDirec
       <section className="home-section library">
         <div className="section-heading">
           <div>
-            <h2>全部动作库</h2>
-            <p>按部位找，点一下加入本次训练</p>
+            <h2>动作库</h2>
+            <p>按部位找，点一下加入今天</p>
           </div>
           <span className="lib-total num">{EXERCISES.length} 个</span>
         </div>
@@ -405,7 +422,11 @@ export default function TrainingPage({
         else onGoSetup();
     };
     const quickTitle = recent.length ? '最近练过' : favorites.length ? '收藏动作' : '推荐动作';
-    const quickSubtitle = recent.length ? '上次练过的，点一下加进今天' : favorites.length ? '你喜欢练的，点一下加进今天' : '从复合动作开始，比较不容易白练';
+    const quickSubtitle = recent.length ? '上次练过的，点一下加入今天' : favorites.length ? '你收藏的动作，点一下加入今天' : '从复合动作开始，比较不容易白练';
+    const startFree = mode === 'free';
+    const shownSlots = sheet ? sheet.slots.filter((x) => !sheet.skipped.includes(x.id)) : [];
+    const ctaCount = startFree ? picked.length : sheet ? shownSlots.filter((x) => x.setPlan.length > 0).length : picked.length;
+    const ctaSets = shownSlots.reduce((n, x) => n + x.setPlan.length, 0);
 
     return (<div className={`training-home${sticky ? ' has-sticky' : ''}`}>
       <ModeTabs mode={mode} onChange={setMode}/>
@@ -431,12 +452,12 @@ export default function TrainingPage({
         <button type="button" className="cta-main" onClick={freeLike ? onStartDirect : onStart} disabled={!freeLike && !canStartToday}>
           <span className="cta-main-copy">
             <b>
-              {freeLike ? '开始自由训练' : '开始今日训练'}
-              {!freeLike && sheet ? <span className="cta-count"> ({sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).length} 个动作)</span> : null}
+              {startFree ? '开始自由训练' : '开始训练'}
+              {ctaCount ? <span className="cta-count"> ({ctaCount} 个动作)</span> : null}
             </b>
-            <small>{freeLike
+            <small>{startFree
                 ? `${picked.length} 个动作 · 练到哪算哪`
-                : (sheet ? `${sheet.slots.filter((x) => !sheet.skipped.includes(x.id)).reduce((n, x) => n + x.setPlan.length, 0)} 组 · 今天` : '按今天的计划开始')}</small>
+                : sheet ? `${ctaSets} 组 · 今天` : picked.length ? '按今天挑的动作开始' : '按今天的计划开始'}</small>
           </span>
           <span className="cta-main-arrow"><Icon name="arrow" size={20}/></span>
         </button>

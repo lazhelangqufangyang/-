@@ -1970,5 +1970,98 @@ body:has(.training-home)::after {
   font-size: 10px;
 }
 
+/* ============================================================
+   2026 视觉打磨：今日计划改成一张带数字的卡片
+   ============================================================ */
+.plan-today.is-today .plan-hero {
+  position: relative;
+  margin-bottom: 12px;
+  padding: 15px 16px 13px;
+  border: 1px solid #f7dfe3;
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 140% at 104% -30%, #ffe1e5 0%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, #ffffff 0%, #fff8f9 100%);
+  box-shadow: 0 12px 28px rgba(230, 57, 70, 0.07);
+}
+
+.plan-today.is-today .plan-heading {
+  margin: 0 0 4px;
+}
+
+.plan-today.is-today .plan-meta-line {
+  margin: 10px 0 0;
+  gap: 14px;
+}
+
+.plan-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: #939aa5;
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.plan-stat b {
+  color: #1d1e24;
+  font-size: 19px;
+  font-weight: 820;
+  letter-spacing: -0.6px;
+}
+
+.plan-stat:first-child b {
+  color: var(--accent-deep);
+}
+
+.plan-dropped {
+  margin: 9px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed #f2dfe3;
+  color: #a1740f;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.plan-today.is-today .plan-meta-line .mini-chip.accent {
+  margin-left: auto;
+}
+
+.week-strip {
+  gap: 7px;
+}
+
+.week-day {
+  border-radius: 17px;
+  background: #f5f6f9;
+}
+
+.week-day.today.selected {
+  background: linear-gradient(180deg, #fff2f4 0%, #ffffff 78%);
+  border-color: #f6c9d0;
+  box-shadow: 0 10px 22px rgba(230, 57, 70, 0.09);
+}
+
+.week-day.selected {
+  box-shadow: 0 10px 22px rgba(22, 24, 29, 0.07);
+}
+
+.slot-card {
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(22, 24, 29, 0.05);
+}
+
+@media (max-width: 374px) {
+  .plan-today.is-today .plan-hero {
+    padding: 13px 13px 11px;
+    border-radius: 19px;
+  }
+  .plan-stat b {
+    font-size: 17px;
+  }
+}
+
 
 

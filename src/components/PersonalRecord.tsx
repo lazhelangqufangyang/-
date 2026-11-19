@@ -423,7 +423,7 @@ export default function PersonalRecord({
             PERSONAL RECORD
           </span>
           <span className={`font-mono text-[9px] tracking-[0.12em] ${usingFallback ? 'text-amber-300/60' : 'text-white/25'}`}>
-            {usingFallback ? 'LOCAL FALLBACK' : 'PR / MAX'}
+            {usingFallback ? '还没有同步' : 'PR / MAX'}
           </span>
         </div>
 
@@ -479,23 +479,36 @@ export default function PersonalRecord({
                   <Trophy size={11} style={{ color: activeData.color }} />
                   PERSONAL BEST
                 </div>
-                <p className="mt-1 truncate text-xs font-medium text-white/55">{activeData.name}</p>
-                <p
-                  className="mt-0.5 text-5xl font-black leading-none tracking-tight"
-                  style={{
-                    color: activeData.color,
-                    textShadow: `0 0 22px ${activeData.color}88, 0 0 52px ${activeData.color}44`,
-                  }}
-                >
-                  {activeData.weight}
-                  <span className="ml-1 text-sm font-bold tracking-normal text-white/45">kg</span>
-                </p>
+                {usingFallback ? (
+                  <>
+                    <p className="mt-1 truncate text-sm font-bold text-white/75">还没有记录</p>
+                    <p className="mt-1 text-[10px] font-medium leading-relaxed text-white/40">
+                      练完一次训练，这里就会留下你的最好成绩
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 truncate text-xs font-medium text-white/55">{activeData.name}</p>
+                    <p
+                      className="mt-0.5 text-5xl font-black leading-none tracking-tight"
+                      style={{
+                        color: activeData.color,
+                        textShadow: `0 0 22px ${activeData.color}88, 0 0 52px ${activeData.color}44`,
+                      }}
+                    >
+                      {activeData.weight}
+                      <span className="ml-1 text-sm font-bold tracking-normal text-white/45">kg</span>
+                    </p>
+                  </>
+                )}
               </div>
 
-              <div className="shrink-0 pb-0.5 text-right">
-                <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">突破于</p>
-                <p className="mt-1 font-mono text-[11px] font-medium text-white/55">{activeData.date}</p>
-              </div>
+              {!usingFallback && (
+                <div className="shrink-0 pb-0.5 text-right">
+                  <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">突破于</p>
+                  <p className="mt-1 font-mono text-[11px] font-medium text-white/55">{activeData.date}</p>
+                </div>
+              )}
             </div>
           </motion.div>
         </AnimatePresence>

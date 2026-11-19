@@ -100,7 +100,7 @@ function partsOf(dayLogs, dayActs) {
         .map(([k]) => k);
 }
 /** 这个动作按主动肌归到哪个部位：记录页的「已完成」按它分组 */
-function partOf(ex) {
+export function partOf(ex) {
     if (!ex)
         return '其他';
     return AREA_OPTIONS.find((a) => isPrimeFor(ex, a)) ?? (ex.pattern === 'cardio' ? '有氧' : '其他');
