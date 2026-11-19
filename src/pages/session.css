@@ -10,21 +10,12 @@
   --sess-line: #eceef2;
   --sess-soft: #f4f5f8;
   min-height: 100dvh;
-  background: #f7f8fa;
+  /* 背景交给全站那一层（暖白 + 纹理），这里不再单独铺色 */
+  background: transparent;
   color: var(--sess-ink);
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
-}
-
-body:has(.sess-page)::before {
-  background-image: linear-gradient(180deg, #f7f8fa 0%, #fbfbfc 48%, #ffffff 100%);
-  background-position: 0 0;
-  background-size: auto;
-}
-
-body:has(.sess-page)::after {
-  display: none;
 }
 
 .sess-head {
@@ -901,14 +892,11 @@ body:has(.sess-page)::after {
    视觉升级：深色训练头 + 浮起卡片 + 更醒目的进度
    ============================================================ */
 .sess-page {
-  background: #f2f3f7;
+  background: transparent;
   --sess-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
 }
 
-body:has(.sess-page)::before {
-  background-image: none;
-  background-color: #f2f3f7;
-}
+/* 训练页标题区的光晕画在 .sess-head 自己身上，背景统一用全站那一层 */
 
 .sess-head {
   position: relative;
@@ -998,6 +986,24 @@ body:has(.sess-page)::before {
 .sess-set {
   border: 0;
   background: #f6f7fa;
+  transform-origin: center top;
+  transition: box-shadow 200ms ease, background 200ms ease;
+}
+
+/* 翻开的这一组：抬起来、压住邻居，才像一张被翻过来的卡片 */
+.sess-set.open {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #f5d3d8, 0 16px 34px rgba(15, 23, 42, 0.14);
+  position: relative;
+  z-index: 3;
+}
+
+.sess-set-row {
+  cursor: pointer;
+}
+
+.sess-log-panel {
+  will-change: transform, height;
 }
 
 .sess-set.done {
@@ -1143,4 +1149,89 @@ body:has(.sess-page)::before {
     padding: 16px 14px 20px;
     border-radius: 22px;
   }
+}
+
+/* ============================================================
+   「记这组」：整张卡以中线为轴翻过去，像把纸翻个面
+   正面是这一组的数据，背面是记组表单；翻的时候高度一起过渡
+   ============================================================ */
+.sess-set {
+  perspective: 1400px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sess-flip {
+  position: relative;
+  height: 48px;
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.22, 0.61, 0.36, 1), height 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.sess-flip.open {
+  height: var(--flip-h, 260px);
+  transform: rotateY(180deg);
+}
+
+.sess-set-row {
+  min-height: 0;
+  height: 48px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.sess-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid #f0f1f4;
+  border-radius: 12px;
+  background: #fafbfc;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.sess-set.done .sess-face-front {
+  border-color: #dcefe3;
+  background: #f4fbf7;
+}
+
+.sess-face-back {
+  border-color: #f3d2d6;
+  background: #fff;
+  transform: rotateY(180deg);
+  pointer-events: none;
+}
+
+.sess-flip.open .sess-face-back {
+  pointer-events: auto;
+}
+
+/* 背面按内容自然撑开，外层量它的高度来做过渡 */
+.sess-face-back-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.sess-face-back-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 2px;
+}
+
+.sess-face-back-head b {
+  color: #2c2f37;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sess-face-back-head span {
+  color: #8a909b;
+  font-size: 10.5px;
 }

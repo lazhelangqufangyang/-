@@ -173,7 +173,7 @@ export default function Timeline({ sheet, profile, onSkip, onReorder, minimal = 
             {wants.length ? <span>今天练：{wants.join('、')}</span> : null}
           </div>
         </div>) : null}
-      {sheet.flags.map((f, i) => (<div className="notice" key={i}>{f}</div>))}
+      {!minimal ? sheet.flags.map((f, i) => (<div className="notice" key={i}>{f}</div>)) : null}
       <div className={`timeline${minimal ? ' cards' : ''}`} ref={listRef}>
         {doing.map((s, i) => (<SlotRow key={s.id} slot={s} order={i + 1} dragging={drag?.id === s.id} dropTarget={drag?.over === s.id} dy={drag?.dy ?? 0} onOpen={setOpen} onToggleSkip={onSkip} onHandleDown={handleDown} onHandleMove={handleMove} onHandleUp={handleUp}/>))}
         {!doing.length ? (<div className="timeline-empty">

@@ -47,6 +47,7 @@ type ProfilePageProps = {
   onLogout?: () => void;
   onSaveProfile?: (profile: UserProfile) => void;
   onOpenModule?: (module: SettingsModule) => void;
+  logs?: { exId?: string; weightKg?: number | null; date?: string }[];
 };
 
 const EMPTY_PROFILE: UserProfile = {
@@ -221,6 +222,7 @@ export default function ProfilePage({
   onLogout,
   onSaveProfile,
   onOpenModule,
+  logs = [],
 }: ProfilePageProps) {
   const [initialCache] = useState(() =>
     isLoggedIn === false ? null : readOverviewCache(),
@@ -755,7 +757,7 @@ export default function ProfilePage({
           </section>
 
           {/* 我的极限重量 (PR) */}
-          <PersonalRecord className="mt-4 w-full" />
+          <PersonalRecord className="mt-4 w-full" logs={logs} />
 
           {/* 荣誉墙 */}
           <section className="mt-6">

@@ -619,6 +619,11 @@ fw, input, logs, date, opts = {}) {
     const protect = (s) => improvised ? Boolean(s.exId) : keepIds.has(s.exId ?? '') || hitsAnyArea(byId(s.exId ?? ''), wants);
     const fitted = fitToTotal(slots, totalSec, dropped, protect);
     const laid = layout(fitted);
+    // 被时间预算挤掉的动作留一份结构化的，页面上才能给「加回来」按钮
+    const fittedIds = new Set(fitted.map((s) => s.id));
+    const droppedSlots = slots
+        .filter((s) => s.exId && !fittedIds.has(s.id))
+        .map((s) => ({ exId: s.exId, name: s.name }));
     return {
         id: uid('sheet'),
         createdAt: new Date().toISOString(),
@@ -633,7 +638,8 @@ fw, input, logs, date, opts = {}) {
         skipped: keptSkipped(opts.skipped, laid),
         loadAdjustPct: pct,
         flags,
-        dropped: [...dropped.values()]
+        dropped: [...dropped.values()],
+        droppedSlots
     };
 }
 function restFor(ex, kind, isMain) {

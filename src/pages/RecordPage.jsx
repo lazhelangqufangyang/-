@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayIso, uid } from '../engine/time.js';
-import { buildEntries, daySquares, partOf, weeksToCover } from '../engine/logbook.js';
+import { buildEntries, monthSquares, partOf } from '../engine/logbook.js';
 import { AREA_OPTIONS } from '../engine/areas.js';
 import { byId } from '../engine/exercises.js';
 import EffortSlider from '../components/EffortSlider.jsx';
+import { StackedMetadata } from '../components/标签叠放/StackedMetadata';
+import SeasonBackdrop, { seasonOfMonth } from './SeasonBackdrop.jsx';
 import './logbook.css';
 
 /**
@@ -328,23 +330,72 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
     const entries = useMemo(() => (DEMO
         ? [demoEntry, ...realEntries.filter((e) => e.date !== DEMO_DATE)]
         : realEntries), [demoEntry, realEntries]);
-    const [allOpen, setAllOpen] = useState(false);
-    const weeks = allOpen ? weeksToCover(entries, today) : 3;
-    const squares = useMemo(() => daySquares(entries, today, weeks), [entries, today, weeks]);
     const [sel, setSel] = useState(recPick?.date ?? (DEMO ? DEMO_DATE : today));
+    const [view, setView] = useState(() => (recPick?.date ?? (DEMO ? DEMO_DATE : today)).slice(0, 7));
+    // 按自然月翻：窗外的季节跟着这个月走
+    const squares = useMemo(() => monthSquares(entries, view, today), [entries, view, today]);
     const [adding, setAdding] = useState(!!recPick);
-    const selIdx = squares.findIndex((s) => s.date === sel);
     const entry = entries.find((e) => e.date === sel) ?? null;
-    const actions = actionsOf(entry, demoActions);
+    // 必须记住引用：每次 render 新建一个数组，会让下面的叠放列表被反复重建（点一下卡一次）
+    const actions = useMemo(() => actionsOf(entry, demoActions), [entry, demoActions]);
+    const [expandedRow, setExpandedRow] = useState(-1);
+    useEffect(() => { setExpandedRow(-1); }, [sel]);
+    /** 叠放标签的一行 = 一个动作：重量 / 组数×次数 / RPE */
+    const stackedItems = useMemo(() => {
+        if (!entry)
+            return [];
+        const dayLogs = logs.filter((l) => l.date === sel);
+        return actions.map((action) => {
+            if (action.type === 'set') {
+                const mine = dayLogs.filter((l) => l.exId === action.exId);
+                const ex = byId(action.exId);
+                const weights = mine.map((l) => l.weightKg).filter((v) => v != null);
+                const rpes = mine.map((l) => l.rpe).filter((v) => typeof v === 'number');
+                const sets = Number((action.core.match(/(\d+)\s*组/) ?? [])[1] ?? 0);
+                const reps = Number((action.core.match(/×\s*(\d+)/) ?? [])[1] ?? 0);
+                const unit = ex?.unit === '每手kg' ? 'kg/手' : 'kg';
+                return {
+                    title: action.title,
+                    priority: weights.length ? `${Math.max(...weights)}${unit}` : '自重',
+                    date: reps ? `${sets}×${reps}` : `${sets} 组`,
+                    assignee: rpes.length ? `RPE ${Math.max(...rpes)}` : 'RPE —'
+                };
+            }
+            const act = entry.activities.find((a) => a.id === action.actId);
+            const minutes = act?.minutes ?? 0;
+            return {
+                title: action.title,
+                priority: minutes > 0 ? `${minutes} 分钟` : '手动',
+                date: (act?.parts ?? []).join('/') || '—',
+                assignee: act?.feel ? `RPE ${act.feel}` : 'RPE —'
+            };
+        });
+    }, [actions, entry, logs, sel]);
+    const rowHeight = typeof window !== 'undefined' && window.innerWidth < 600 ? 64 : 80;
+    const stackedHeight = Math.max(180, stackedItems.length * rowHeight + 96);
+    const handleExpandRow = useCallback((index) => setExpandedRow(index), []);
+    // 注意：不要把 expanded 回传给组件。回传会让组件的 update() 重建整列 DOM，
+    // 展开动画每帧都在重建，就会「卡一下」。展开状态只在 React 这边用来显示删除按钮。
+    const stackedOptions = useMemo(() => ({
+        heading: `${dayLabel(sel)} · ${stackedItems.length} 个动作`,
+        items: stackedItems,
+        theme: 'light',
+        height: stackedHeight,
+        onExpandChange: handleExpandRow
+    }), [stackedItems, stackedHeight, sel, handleExpandRow]);
     const dateName = entry?.dayName ?? weekdayOfIso(sel);
     const onlyRecord = Boolean(entry && (entry.demo || (!entry.setCount && entry.activities.length > 0)));
-    const shift = (by) => {
-        const next = squares[selIdx + by];
-        if (next) setSel(next.date);
+    const isThisMonth = view === today.slice(0, 7);
+    const shiftMonth = (by) => {
+        const [year, month] = view.split('-').map(Number);
+        const next = new Date(year, month - 1 + by, 1);
+        const key = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+        setView(key);
+        setSel(key === today.slice(0, 7) ? today : `${key}-01`);
     };
-    const toggleAll = () => {
-        if (allOpen) setSel(DEMO ? DEMO_DATE : today);
-        setAllOpen(!allOpen);
+    const backToToday = () => {
+        setView(today.slice(0, 7));
+        setSel(DEMO ? DEMO_DATE : today);
     };
     useEffect(() => {
         if (!adding) return undefined;
@@ -368,22 +419,31 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
         onPickDone();
         onDismissPick?.();
     };
-    const selMonth = sel.slice(0, 7);
-    return (<div className="logbook-page">
-      <section className="rec-cal">
+    // 季节跟着日历当前看的月份走（12/1/2 冬、3–5 春、6–8 夏、9–11 秋）
+    const viewMonthNo = Number(view.slice(5, 7));
+    const season = seasonOfMonth(viewMonthNo);
+    return (<div className="logbook-page seasoned">
+      <div className="season-window">
+        <SeasonBackdrop month={viewMonthNo}/>
+        <section className="rec-cal">
         <div className="rec-cal-head">
-          <div className="rec-cal-month num">{selMonth.replace('-', '年')}月</div>
+          <div className="rec-cal-month num">
+            {view.replace('-', '年')}月
+            <span className="rec-season">{season.label}</span>
+          </div>
           <div className="rec-cal-tools">
-            <button type="button" className="rec-cal-all" onClick={toggleAll}>{allOpen ? '近三周' : '全部'}</button>
-            <button type="button" className="rec-cal-arrow" onClick={() => shift(-7)} disabled={selIdx <= 0} aria-label="早一周">‹</button>
-            <button type="button" className="rec-cal-arrow" onClick={() => shift(7)} disabled={selIdx < 0 || selIdx >= squares.length - 1} aria-label="晚一周">›</button>
+            <button type="button" className="rec-cal-all" onClick={backToToday} disabled={isThisMonth}>今天</button>
+            <button type="button" className="rec-cal-arrow" onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button>
+            <button type="button" className="rec-cal-arrow" onClick={() => shiftMonth(1)} disabled={isThisMonth} aria-label="下个月">›</button>
           </div>
         </div>
         <div className="rec-week-row">
           {['一', '二', '三', '四', '五', '六', '日'].map((w) => <span key={w}>{w}</span>)}
         </div>
         <div className="rec-grid">
-          {squares.map((s) => {
+          {squares.map((s, index) => {
+              if (!s)
+                  return <span className="rec-day-blank" key={`blank-${index}`} aria-hidden="true"/>;
               const normalized = [...new Set(s.parts.map(canonicalPart))].filter((p) => p !== '其他').sort((a, b) => partRank(a) - partRank(b));
               const tags = (normalized.length ? normalized : s.parts).slice(0, 2);
               return (<button key={s.date} type="button" className={`rec-day${s.date === sel ? ' selected' : ''}${s.date === today ? ' today' : ''}${s.future ? ' future' : ''}${s.tone === 'done' ? ' done' : ''}`} disabled={s.future} aria-pressed={s.date === sel} onClick={() => setSel(s.date)} title={`${s.date} ${s.dayName}${tags.length ? ' · ' + tags.map((p) => metaOf(p).label).join('、') : ''}`}>
@@ -400,13 +460,24 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
           })}
         </div>
       </section>
+      </div>
 
       <section className="rec-detail">
         <div className="rec-detail-head">
           <h2>{dayLabel(sel)} <span>{dateName}</span></h2>
           {entry && actions.length ? <span className="rec-detail-tag">{onlyRecord ? '仅记录' : '训练'}</span> : null}
         </div>
-        {entry && actions.length ? <RecordGroups actions={actions} onDelete={removeAction}/> : <EmptyDay/>}
+        {entry && actions.length ? (<>
+          <StackedMetadata
+            className="rec-stacked"
+            options={stackedOptions}/>
+          {expandedRow >= 0 && actions[expandedRow] ? (<button type="button" className="rec-stacked-del" onClick={() => {
+                removeAction(actions[expandedRow]);
+                setExpandedRow(-1);
+            }}>
+              删除「{actions[expandedRow].title}」
+            </button>) : (<p className="rec-stacked-hint">点一行，展开重量 / 组数 / RPE</p>)}
+        </>) : <EmptyDay/>}
       </section>
 
       <div className="rec-bottom-space" aria-hidden="true"/>

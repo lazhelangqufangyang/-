@@ -247,9 +247,44 @@ export function daySquares(entries, to, weeks = 6) {
     }
     return out;
 }
+/**
+ * 整月的格子：记录页按自然月翻，窗外的季节才跟得上。
+ * 前后补 null 让网格对齐到周一开头；future 仍然按「今天」算，不是按这个月。
+ */
+export function monthSquares(entries, monthKey, today = todayIso()) {
+    const byDate = new Map(entries.map((e) => [e.date, e]));
+    const [year, month] = monthKey.split('-').map(Number);
+    const lead = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+    const total = new Date(year, month, 0).getDate();
+    const out = [];
+    for (let i = 0; i < lead; i += 1)
+        out.push(null);
+    for (let day = 1; day <= total; day += 1) {
+        const date = `${monthKey}-${String(day).padStart(2, '0')}`;
+        const e = byDate.get(date) ?? null;
+        const sets = e?.setCount ?? 0;
+        const actCount = e?.activities.length ?? 0;
+        out.push({
+            date,
+            dayName: weekdayName(weekdayOf(date)),
+            day: date.slice(8),
+            col: colOf(date),
+            hasRecord: !!e,
+            sets,
+            cardioMin: e?.cardioMin ?? 0,
+            actCount,
+            parts: e?.parts ?? [],
+            tone: sets || actCount ? 'done' : 'none',
+            future: date > today
+        });
+    }
+    while (out.length % 7 !== 0)
+        out.push(null);
+    return out;
+}
+
 /** 要把最早那条记录也画进格子需要几周：页面默认只画三周，剩下的点「全部」再看 */
-export function weeksToCover(entries, to) {
-    if (!entries.length)
+export function weeksToCover(entries, to) {    if (!entries.length)
         return 3;
     const earliest = entries.reduce((m, e) => (e.date < m ? e.date : m), to);
     const last = addDaysIso(to, 6 - colOf(to));

@@ -2025,6 +2025,44 @@ body:has(.training-home)::after {
   line-height: 1.5;
 }
 
+.plan-cut {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px dashed #f2dfe3;
+}
+
+.plan-cut-label {
+  color: #a1740f;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.plan-cut-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 10px;
+  border: 1px solid #f0d9b0;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #96660a;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 140ms var(--ease), background 160ms var(--ease);
+}
+
+.plan-cut-btn:active {
+  transform: scale(0.95);
+  background: #fdf1d8;
+}
+
 .plan-today.is-today .plan-meta-line .mini-chip.accent {
   margin-left: auto;
 }

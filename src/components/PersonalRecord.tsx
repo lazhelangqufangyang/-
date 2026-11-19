@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Trophy } from 'lucide-react';
 import { apiRequest } from '../api/client';
+import { byId } from '../engine/exercises.js';
+import { partOf } from '../engine/logbook.js';
 
 export type PRKey = 'chest' | 'back' | 'shoulders' | 'arms' | 'legs';
 
 export type PRData = {
   name: string;
-  weight: number;
+  weight: number | null;
   date: string;
   color: string;
   /** public/images 下的肌肉剪影图，例如 /images/chest.png */
@@ -44,6 +46,18 @@ const PR_TABS: { key: PRKey; label: string }[] = [
 ];
 
 const PR_KEYS = PR_TABS.map((tab) => tab.key);
+
+/** 每个部位用哪一类动作算“最大重量”，写清楚才不会有人拿卧推跟深蹲比 */
+const PART_KEY: Record<string, PRKey> = { 胸: 'chest', 背: 'back', 肩: 'shoulders', 手臂: 'arms', 腿: 'legs', 臀: 'legs' };
+const LIFT_HINT: Record<PRKey, string> = { chest: '卧推', back: '硬拉', shoulders: '推举', arms: '弯举', legs: '深蹲' };
+/** 每个部位的代表动作：这一项的最重一次才是那一栏的主角 */
+const LIFT_PATTERN: Record<PRKey, RegExp> = {
+  chest: /卧推/,
+  back: /硬拉/,
+  shoulders: /推举|推肩/,
+  arms: /弯举/,
+  legs: /深蹲/,
+};
 
 function normalizePRData(payload: unknown): Record<PRKey, PRData> {
   if (!payload || typeof payload !== 'object') {
@@ -313,8 +327,10 @@ function PRSkeleton({ className = '' }: { className?: string }) {
 
 export default function PersonalRecord({
   className = '',
+  logs = [],
 }: {
   className?: string;
+  logs?: { exId?: string; weightKg?: number | null; date?: string }[];
 }) {
   const [prData, setPrData] = useState<Record<PRKey, PRData> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -335,8 +351,8 @@ export default function PersonalRecord({
         setUsingFallback(false);
       } catch {
         if (controller.signal.aborted) return;
-        // 后端未启动或数据异常时，用组件内 mockPRData 兜底，不让卡片白屏。
-        setPrData(mockPRData);
+        // 没登录 / 后端没起：不编假数据，改成本地记录里算出来的最好成绩
+        setPrData(null);
         setUsingFallback(true);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -347,9 +363,49 @@ export default function PersonalRecord({
     return () => controller.abort();
   }, []);
 
-  if (loading || !prData) return <PRSkeleton className={className} />;
+  // 本机记过的组里算两套数：这一部位的代表动作（胸=卧推…）最重一次，以及该部位所有动作里最重的一次
+  const localBest = useMemo(() => {
+    const fixed: Partial<Record<PRKey, { name: string; weight: number; date: string }>> = {};
+    const overall: Partial<Record<PRKey, { name: string; weight: number; date: string }>> = {};
+    for (const log of logs) {
+      const weight = log?.weightKg;
+      if (!log?.exId || weight == null || !(weight > 0)) continue;
+      const ex = byId(log.exId);
+      if (!ex) continue;
+      const key = PART_KEY[partOf(ex)];
+      if (!key) continue;
+      const candidate = { name: ex.name, weight, date: log.date ?? '' };
+      if (!overall[key] || weight > overall[key]!.weight) overall[key] = candidate;
+      if (LIFT_PATTERN[key].test(ex.name) && (!fixed[key] || weight > fixed[key]!.weight)) {
+        fixed[key] = candidate;
+      }
+    }
+    return { fixed, overall };
+  }, [logs]);
 
-  const activeData = prData[activeKey] ?? mockPRData[activeKey];
+  const merged = useMemo(() => {
+    const out = {} as Record<PRKey, PRData>;
+    for (const key of PR_KEYS) {
+      const base = mockPRData[key];
+      const server = prData?.[key];
+      const local = localBest.fixed[key] ?? localBest.overall[key];
+      const best = server ?? local;
+      out[key] = best
+        ? { ...base, name: best.name, weight: best.weight, date: best.date }
+        : { ...base, weight: null, date: '', name: base.name };
+    }
+    return out;
+  }, [prData, localBest]);
+
+  if (loading) return <PRSkeleton className={className} />;
+
+  const activeData = merged[activeKey];
+  const hasRecord = activeData.weight !== null;
+  const hasAny = PR_KEYS.some((key) => merged[key].weight !== null);
+  const badge = prData ? 'PR / MAX' : hasAny ? '本地记录' : '还没有同步';
+  const partLabel = PR_TABS.find((tab) => tab.key === activeKey)?.label ?? '';
+  const overallBest = localBest.overall[activeKey];
+  const extraBest = overallBest && overallBest.name !== activeData.name ? overallBest : null;
 
   const selectPart = (key: PRKey) => {
     if (key === activeKey) return;
@@ -422,8 +478,8 @@ export default function PersonalRecord({
           <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
             PERSONAL RECORD
           </span>
-          <span className={`font-mono text-[9px] tracking-[0.12em] ${usingFallback ? 'text-amber-300/60' : 'text-white/25'}`}>
-            {usingFallback ? '还没有同步' : 'PR / MAX'}
+          <span className={`font-mono text-[9px] tracking-[0.12em] ${prData ? 'text-white/25' : 'text-amber-300/60'}`}>
+            {badge}
           </span>
         </div>
 
@@ -455,6 +511,9 @@ export default function PersonalRecord({
             );
           })}
         </div>
+        <p className="mt-1.5 text-[9px] font-medium leading-relaxed text-white/30">
+          {partLabel}看的是「{LIFT_HINT[activeKey]}」这类动作里最重的一次
+        </p>
       </div>
 
       <div className="absolute inset-x-4 bottom-4 z-20">
@@ -479,7 +538,7 @@ export default function PersonalRecord({
                   <Trophy size={11} style={{ color: activeData.color }} />
                   PERSONAL BEST
                 </div>
-                {usingFallback ? (
+                {!hasRecord ? (
                   <>
                     <p className="mt-1 truncate text-sm font-bold text-white/75">还没有记录</p>
                     <p className="mt-1 text-[10px] font-medium leading-relaxed text-white/40">
@@ -488,7 +547,9 @@ export default function PersonalRecord({
                   </>
                 ) : (
                   <>
-                    <p className="mt-1 truncate text-xs font-medium text-white/55">{activeData.name}</p>
+                    <p className="mt-1 truncate text-xs font-medium text-white/55">
+                      {activeData.name} · 最重一次
+                    </p>
                     <p
                       className="mt-0.5 text-5xl font-black leading-none tracking-tight"
                       style={{
@@ -499,11 +560,16 @@ export default function PersonalRecord({
                       {activeData.weight}
                       <span className="ml-1 text-sm font-bold tracking-normal text-white/45">kg</span>
                     </p>
+                    {extraBest && (
+                      <p className="mt-1.5 truncate text-[10px] font-medium text-white/40">
+                        {partLabel}最重的一次：{extraBest.name} {extraBest.weight} kg
+                      </p>
+                    )}
                   </>
                 )}
               </div>
 
-              {!usingFallback && (
+              {hasRecord && (
                 <div className="shrink-0 pb-0.5 text-right">
                   <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">突破于</p>
                   <p className="mt-1 font-mono text-[11px] font-medium text-white/55">{activeData.date}</p>

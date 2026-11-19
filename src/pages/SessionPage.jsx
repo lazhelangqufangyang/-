@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { byId, swapCandidates } from '../engine/exercises.js';
 import { dropStepPlan, hasDropSet } from '../engine/day.js';
@@ -60,6 +60,24 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
     const [aiNote, setAiNote] = useState('');
     const [showReward, setShowReward] = useState(false);
     const [showBadge, setShowBadge] = useState(false);
+    /** 翻面卡片的背面高度：量出来再给外层，整张卡才能像纸一样翻过去 */
+    const backRefs = useRef({});
+    const [flipHeights, setFlipHeights] = useState({});
+    useLayoutEffect(() => {
+        if (!openKey)
+            return undefined;
+        const measure = () => {
+            const el = backRefs.current[openKey];
+            if (!el)
+                return;
+            const height = el.offsetHeight;
+            if (height > 0)
+                setFlipHeights((m) => (m[openKey] === height ? m : { ...m, [openKey]: height }));
+        };
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [openKey, dropSteps, draftRpe, draftReps, draftWeight]);
     const blockKey = sheet ? `fitplan.blocks.${sheet.id}` : '';
     const [blocksDone, setBlocksDone] = useState(() => {
         if (!blockKey) return [];
@@ -195,14 +213,6 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
         setAiBusy(false);
     };
     const title = `${sheet.input.direct ? '自选' : sheet.focus} · ${actionCount} 个动作`;
-    // 被时间预算砍掉的动作也算「说明」：不然用户只会觉得莫名其妙少了几个
-    const cuts = (sheet.dropped ?? []).filter((d) => d.includes('砍掉'));
-    const notes = [
-        ...(sheet.flags ?? []),
-        ...(sheet.dropped ?? []).map((d) => (d.includes('砍掉')
-            ? `砍掉了：${d.replace(/^有氧：/, '').replace(/\s*被砍掉.*$/, '')}`
-            : `时间压缩：${d}`))
-    ];
     return (<div className="sess-page">
       <header className="sess-head">
         <div className="sess-head-line">
@@ -217,14 +227,6 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
       </header>
 
       <main className="sess-body">
-        {notes.length ? (<details className={`sess-notes${cuts.length ? ' has-drop' : ''}`}>
-          <summary>{cuts.length
-            ? `有 ${cuts.length} 个动作没排进来 · 点开看原因`
-            : `这张表有 ${notes.length} 条说明 · 点开看`}</summary>
-          <ul>
-            {notes.map((f, i) => <li key={i}>{f}</li>)}
-          </ul>
-        </details>) : null}
         {activeSlots.map((slot, order) => {
             const isLift = slot.setPlan.length > 0;
             const doneCount = isLift ? slot.setPlan.filter((_, i) => logMap.has(setKey(slot.id, i))).length : 0;
@@ -255,8 +257,22 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
                       const isOpen = openKey === key;
                       const data = setData(slot, p, rec);
                       const isObject = data && typeof data === 'object';
-                      return (<div className={`sess-set${rec ? ' done' : ''}${isOpen ? ' open' : ''}`} key={key} id={`srow-${key}`}>
-                        <div className="sess-set-row">
+                      return (<div
+                        className={`sess-set${rec ? ' done' : ''}${isOpen ? ' open' : ''}`}
+                        key={key}
+                        id={`srow-${key}`}
+                        style={{ '--flip-h': `${flipHeights[key] ?? 240}px` }}>
+                        <div className={`sess-flip${isOpen ? ' open' : ''}`}>
+                        <div className="sess-face sess-face-front">
+                        <div className="sess-set-row" role="button" tabIndex={0} onClick={() => (isOpen ? setOpenKey(null) : openLog(slot, i))} onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (isOpen)
+                                    setOpenKey(null);
+                                else
+                                    openLog(slot, i);
+                            }
+                        }}>
                           <span className={`sess-set-check${rec ? ' on' : ''}`} aria-hidden="true">{rec ? '✓' : ''}</span>
                           <span className="sess-set-idx num">第{i + 1}组{p.drop ? '｜递减' : ''}</span>
                           <span className="sess-set-data num">
@@ -267,11 +283,24 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
                               {data.rpe ? <em>RPE {data.rpe}</em> : null}
                             </>) : (<b>{data}</b>)}
                           </span>
-                          <button type="button" className="sess-set-action" onClick={() => (isOpen ? setOpenKey(null) : openLog(slot, i))} aria-expanded={isOpen}>
+                          <button type="button" className="sess-set-action" onClick={(e) => {
+                              e.stopPropagation();
+                              if (isOpen)
+                                  setOpenKey(null);
+                              else
+                                  openLog(slot, i);
+                          }} aria-expanded={isOpen}>
                             {rec ? '改这组' : '点这里记这组'} <span aria-hidden="true">›</span>
                           </button>
                         </div>
-                        {isOpen ? (<div className="sess-log-panel">
+                        </div>
+                        <div className="sess-face sess-face-back">
+                        <div className="sess-face-back-inner" ref={(el) => { backRefs.current[key] = el; }}>
+                        <div className="sess-face-back-head">
+                          <b>第 {i + 1} 组</b>
+                          <span className="num">目标 {p.reps} 次{p.drop ? ' · 递减组' : ''}</span>
+                        </div>
+                        <div className="sess-log-panel">
                           {p.drop ? (<div className="sess-dropbox">
                             <div className="sess-drop-head">
                               <span>递减组做几档</span>
@@ -324,7 +353,10 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
                               <button type="button" className="sess-save" onClick={() => saveLog(slot, i)}>记下</button>
                             </div>
                           </div>
-                        </div>) : null}
+                        </div>
+                        </div>
+                        </div>
+                      </div>
                       </div>);
                   })}
                 </div>

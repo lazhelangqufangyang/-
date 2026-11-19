@@ -939,3 +939,37 @@ body:has(.logbook-page) .tabbar button[aria-current='page'] .ico {
     transition: none;
   }
 }
+
+/* ---------- 记录页：标签叠放（重量 / 组数 / RPE） ---------- */
+.rec-stacked [data-motion-surface] {
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.06);
+}
+
+.rec-stacked-del {
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  margin-top: 10px;
+  border: 1px solid #f5c2c7;
+  border-radius: 12px;
+  background: #fff6f7;
+  color: var(--rec-red-deep);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 140ms ease;
+}
+
+.rec-stacked-del:active {
+  transform: scale(0.98);
+}
+
+.rec-stacked-hint {
+  margin: 8px 2px 0;
+  color: #9aa0aa;
+  font-size: 10.5px;
+  text-align: center;
+}

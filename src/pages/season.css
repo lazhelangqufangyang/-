@@ -1,0 +1,192 @@
+/* ============================================================
+   记录页顶部：只有日历这一块是「车窗」
+   视频 + 窗框 + 蒙版都压在日历区域里，下面的记录列表回到普通页面
+   ============================================================ */
+
+/* 车窗的高度是固定的：翻到 5 行的月份，只是日历变矮、窗外多露一点，
+   窗框本身不会跟着忽高忽低 */
+.season-window {
+  position: relative;
+  height: 466px;
+  margin: 0 -12px;
+  padding: 12px;
+  overflow: hidden;
+  border-radius: 0 0 26px 26px;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-start;
+}
+
+.season-window .rec-cal {
+  flex: 1;
+  min-width: 0;
+}
+
+.season-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #070a10;
+  pointer-events: none;
+}
+
+.season-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1000ms ease-in-out;
+}
+
+.season-video.on {
+  opacity: 1;
+}
+
+/* PNG 窗框：轻轻上下浮动，缩放 1.03 保证浮动时不会露出边缘 */
+.season-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  will-change: transform;
+  animation: train-bob 3s ease-in-out infinite;
+}
+
+@keyframes train-bob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1.03);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-frame {
+    animation: none;
+    transform: scale(1.03);
+  }
+}
+
+/* 压暗一层，白字才读得出来；但别把窗外压死 */
+.season-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(4, 8, 14, 0.46) 0%, rgba(4, 8, 14, 0.22) 42%, rgba(4, 8, 14, 0.4) 100%);
+}
+
+/* ---------- 日历：极淡玻璃 + 白字 ---------- */
+.logbook-page.seasoned {
+  position: relative;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 0;
+}
+
+.logbook-page.seasoned .rec-cal {
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.08);
+  backdrop-filter: blur(1.5px) saturate(1.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22), inset 0 0 60px rgba(4, 8, 14, 0.2);
+}
+
+.logbook-page.seasoned .rec-cal-month {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.82), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.logbook-page.seasoned .rec-week-row span {
+  color: rgba(255, 255, 255, 0.68);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.logbook-page.seasoned .rec-cal-all,
+.logbook-page.seasoned .rec-cal-arrow {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.logbook-page.seasoned .rec-cal-all:disabled,
+.logbook-page.seasoned .rec-cal-arrow:disabled {
+  color: rgba(255, 255, 255, 0.38);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.logbook-page.seasoned .rec-day {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.logbook-page.seasoned .rec-day-num {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  -webkit-text-stroke: 0.45px rgba(0, 0, 0, 0.42);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 2px 10px rgba(0, 0, 0, 0.55);
+}
+
+.logbook-page.seasoned .rec-day.today:not(.selected) .rec-day-num {
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.8);
+}
+
+.logbook-page.seasoned .rec-day.selected {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.logbook-page.seasoned .rec-day.selected .rec-day-num {
+  background: var(--rec-red);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+}
+
+.logbook-page.seasoned .rec-day.future {
+  opacity: 0.34;
+}
+
+.logbook-page.seasoned .rec-day:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* 月份旁边的季节小标 */
+.rec-season {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* 整月日历里月初/月末的占位格 */
+.rec-day-blank {
+  display: block;
+  height: 58px;
+}
+
+/* ---------- 日历下面的记录：仍是玻璃卡，但底是页面的浅色 ---------- */
+.logbook-page.seasoned .rec-action-card {
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.logbook-page.seasoned .rec-day-empty {
+  background: rgba(255, 255, 255, 0.86);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}

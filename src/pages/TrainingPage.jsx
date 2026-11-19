@@ -166,7 +166,7 @@ function PreviewList({ day }) {
     </div>);
 }
 
-function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip, onReorder, onGoPlan }) {
+function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip, onReorder, onGoPlan, onTogglePick }) {
     const isToday = selected === today;
     const day = weekPlan?.days?.[selected] ?? null;
     const ids = day?.exerciseIds ?? [];
@@ -177,10 +177,6 @@ function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip
         ? visible.reduce((n, x) => n + x.setPlan.length, 0)
         : ids.reduce((n, id) => n + (byId(id)?.sets ?? 0), 0);
     const focus = (isToday ? sheet?.focus : null) || day?.focus || (isToday ? '自由安排' : '休息日');
-    // 只把“真被砍掉的动作”说出来；「某段热身减 1 分钟」这种细账别往脸上糊
-    const droppedCuts = isToday && sheet
-        ? (sheet.dropped ?? []).filter((d) => d.includes('砍掉')).map((d) => d.replace(/^有氧：/, '').replace(/\s*被砍掉.*$/, ''))
-        : [];
     return (<section className={`plan-today${isToday ? ' is-today' : ''}`}>
       <div className="plan-hero">
         <div className="plan-heading">
@@ -207,9 +203,13 @@ function PlanToday({ sheet, weekPlan, selected, today, profile, onSelect, onSkip
             <button type="button" className="mini-chip" onClick={() => onSelect(today)}>回到今天</button>
           </>)}
         </div>
-        {droppedCuts.length ? (<p className="plan-dropped">
-            今天装不下，砍掉了：{droppedCuts.join('；')}
-          </p>) : null}
+        {isToday && sheet?.droppedSlots?.length ? (<div className="plan-cut">
+            <span className="plan-cut-label">今天没排进来</span>
+            {sheet.droppedSlots.map((c) => (<button key={c.exId} type="button" className="plan-cut-btn" onClick={() => onTogglePick?.(c.exId)}>
+                <Icon name="plus" size={12}/>
+                {c.name}
+              </button>))}
+          </div>) : null}
       </div>
       {isToday
         ? (sheet ? <Timeline sheet={sheet} profile={profile} onSkip={onSkip} onReorder={onReorder} minimal/> : <RestCard today/>)
@@ -435,7 +435,7 @@ export default function TrainingPage({
         {mode === 'plan' ? (<>
           <WeekStrip weekPlan={weekPlan} today={today} selected={selected} onSelect={setSelected}/>
           {hasPlan ? (<>
-            <PlanToday sheet={sheet} weekPlan={weekPlan} selected={selected} today={today} profile={profile} onSelect={setSelected} onSkip={onSkip} onReorder={onReorder} onGoPlan={onGoPlan}/>
+            <PlanToday sheet={sheet} weekPlan={weekPlan} selected={selected} today={today} profile={profile} onSelect={setSelected} onSkip={onSkip} onReorder={onReorder} onGoPlan={onGoPlan} onTogglePick={onTogglePick}/>
             <MoveCarousel title={quickTitle} subtitle={quickSubtitle} items={quick} picked={picked} onToggle={onTogglePick} onGoMoves={onGoMoves}/>
           </>) : (<>
             <EmptyPlan profile={profile} onGenerate={handleGenerate} onStartDirect={onStartDirect}/>
