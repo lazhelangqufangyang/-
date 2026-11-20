@@ -4,6 +4,7 @@
   "description": "把想练成什么样翻译成周框架和当天的执行清单：今天点几个练的部位就排几个，练的时候不计时。所有数据只存本机。",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#FFFFFF",

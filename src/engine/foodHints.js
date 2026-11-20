@@ -4,6 +4,7 @@
  * 因为菜量、油量、吃了几份只有你自己知道。数字取常见公开成分表的粗范围，
  * 目的是让「今天吃没吃够」有个参照，不是当营养测算。
  */
+import { FOOD_MICRO, MICRO_NUTRIENTS, sumMicro } from './foodMicro.js';
 export const NUTRIENTS = [
     { key: 'protein', label: '蛋白', unit: 'g' },
     { key: 'carbs', label: '碳水', unit: 'g' },
@@ -149,7 +150,15 @@ export function estimateMeal(name) {
                     items: withNut.length
                 }
             ];
-        })
+        }),
+        // 微量元素按「一份」的粗值直接相加；食物表里没有的项不硬编
+        micros: (() => {
+            const totals = sumMicro(items.map((h) => h.label));
+            return MICRO_NUTRIENTS
+                .filter((meta) => totals[meta.key] !== undefined)
+                .map((meta) => ({ key: meta.key, label: meta.label, unit: meta.unit, value: totals[meta.key] }));
+        })(),
+        microCovered: items.filter((h) => Boolean(FOOD_MICRO[h.label])).length
     };
 }
 function round1(v) {

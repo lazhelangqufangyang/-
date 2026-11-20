@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { exportJson, parseImported, STORAGE_KEY } from '../store.js';
-import { apiBaseCustom, apiBaseLabel, loginBadge, sessionToken, setApiBase } from '../api/account.js';
+import { apiBaseCustom, apiBaseLabel, loginBadge, readPlan, sessionToken, setApiBase } from '../api/account.js';
 import { clearCloudRecords, countLines, pullRecords, pushRecords, receiptText } from '../api/records.js';
 import AccountCard from '../components/AccountCard.jsx';
+import InstallPwa from '../components/InstallPwa.jsx';
 /** 设置里的模块：一个模块一个按钮，点进去是一个子页面 */
 const MODULES = [
     { key: 'profile', href: '#/settings/profile', title: '我的档案', desc: '身体数据、一周练哪几天、想练成什么样；也可以不设目标自由练', ico: '☺' },
     { key: 'account', href: '#/settings/account', title: '账号', desc: '账号密码或支付宝授权登录；云端只认账号和订阅，记录要你自己点上传', ico: '◎' },
-    { key: 'data', href: '#/settings/data', title: '数据与备份', desc: '导出 JSON、导入 JSON、云端整份备份和拉回、清空本机数据', ico: '≣' },
+    { key: 'data', href: '#/settings/data', title: '数据与备份', desc: '导出 JSON、导入 JSON、Pro 云端整份备份和拉回、清空本机数据', ico: '≣' },
     { key: 'safety', href: '#/settings/safety', title: '安全边界', desc: '这个应用不做什么：不诊断、不冲极限、不断食', ico: '⚠' }
 ];
 export default function SettingsPage({ state, sub, onGo, onSave, onImport }) {
@@ -31,6 +32,7 @@ export default function SettingsPage({ state, sub, onGo, onSave, onImport }) {
       </Sub>);
     if (sub === 'data')
         return (<Sub title="数据与备份" onGo={onGo}>
+        <InstallPwa />
         <BaseRow />
         <DataPanel state={state} onImport={onImport}/>
         <CloudPanel state={state} onImport={onImport}/>
@@ -50,15 +52,18 @@ export default function SettingsPage({ state, sub, onGo, onSave, onImport }) {
           </div>
         </div>
       </Sub>);
-    return (<div className="modlist">
-      {MODULES.map((m) => (<button key={m.key} className="modbtn" onClick={() => onGo(m.href)}>
-            <span className="modico">{m.ico}</span>
-            <span className="modtext">
-              <b>{m.title}</b>
-              <span className="moddesc">{m.key === 'account' && badge ? badge : m.desc}</span>
-            </span>
-            <span className="modarrow">›</span>
-          </button>))}
+    return (<div>
+      <InstallPwa />
+      <div className="modlist">
+        {MODULES.map((m) => (<button key={m.key} className="modbtn" onClick={() => onGo(m.href)}>
+              <span className="modico">{m.ico}</span>
+              <span className="modtext">
+                <b>{m.title}</b>
+                <span className="moddesc">{m.key === 'account' && badge ? badge : m.desc}</span>
+              </span>
+              <span className="modarrow">›</span>
+            </button>))}
+      </div>
     </div>);
 }
 function Sub({ title, onGo, children }) {
@@ -168,11 +173,27 @@ function CloudPanel({ state, onImport }) {
     const [msg, setMsg] = useState('');
     const [busy, setBusy] = useState(false);
     const [conflict, setConflict] = useState('');
+    const [plan, setPlan] = useState(null);
+    // 云端同步是 Pro 权益：先读一次订阅，免费版直接把按钮锁上并给升级入口
+    useEffect(() => {
+        if (!sessionToken())
+            return;
+        let alive = true;
+        readPlan()
+            .then((p) => { if (alive)
+            setPlan(p); })
+            .catch(() => { if (alive)
+            setPlan(null); });
+        return () => {
+            alive = false;
+        };
+    }, []);
     if (!sessionToken())
         return (<div className="card" style={{ marginTop: 12 }}>
         <h3>云端备份</h3>
         <div className="small muted">先在「账号」里登录，云端才知道这些记录是谁的。没登录时所有记录都只在这台设备上。</div>
       </div>);
+    const proLocked = Boolean(plan && plan.plan !== 'pro');
     const run = async (fn) => {
         setBusy(true);
         setMsg('');
@@ -184,6 +205,8 @@ function CloudPanel({ state, onImport }) {
             // 409 = 后端认出这台设备拿的是旧的一份，别把人家刚传上去的盖掉
             if (e.status === 409)
                 setConflict(e.message);
+            else if (e.status === 402)
+                setMsg(`${e.message} 在「账号」里升级 Pro 就能继续。`);
             else
                 setMsg(e.message);
         }
@@ -218,12 +241,16 @@ function CloudPanel({ state, onImport }) {
     };
     return (<div className="card" style={{ marginTop: 12 }}>
       <h3>云端备份</h3>
-      <div className="small muted">这台设备现在攒了：{countLines(state)}。传上去是按账号分开的整份记录，换设备或清了浏览器数据之后能从云端拉回来。</div>
+      <div className="small muted">这台设备现在攒了：{countLines(state)}。传上去是按账号分开的整份记录，换设备或清了浏览器数据之后能从云端拉回来。云端同步是 Pro 权益；删云端那份不受影响。</div>
+      {proLocked ? (<div className="notice" style={{ marginTop: 10 }}>
+          云端同步是 Pro 权益（¥{plan.price?.yuan ?? 8} / {plan.price?.days ?? 30} 天）。
+          <button className="btn ghost" style={{ marginLeft: 8 }} onClick={() => { window.location.hash = '#/settings/account'; }}>去升级 Pro</button>
+        </div>) : null}
       <div className="btnbar" style={{ marginTop: 10 }}>
-        <button className="btn" onClick={upload} disabled={busy}>
+        <button className="btn" onClick={upload} disabled={busy || proLocked}>
           传到云端
         </button>
-        <button className="btn" onClick={download} disabled={busy}>
+        <button className="btn" onClick={download} disabled={busy || proLocked}>
           从云端拉回
         </button>
         <button className="btn ghost" onClick={erase} disabled={busy}>

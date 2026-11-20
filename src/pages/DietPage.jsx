@@ -3,6 +3,7 @@ import { MEAL_LABELS } from '../types.js';
 import { addDaysIso, todayIso, uid } from '../engine/time.js';
 import { buildDays, dietScopeNote, dietTargets, macroLines, macroTargets, rangeDiet, verdict } from '../engine/diet.js';
 import { estimateMeal, NUTRIENTS, searchFoods } from '../engine/foodHints.js';
+import { MICRO_NUTRIENTS, microTargets } from '../engine/foodMicro.js';
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
 /** 小环形缺口图：已吃 vs 目标 */
 function RingGauge({ value, target, label, unit }) {
@@ -48,6 +49,7 @@ export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, o
     const today = todayIso();
     const targets = useMemo(() => dietTargets(profile), [profile]);
     const macros = useMemo(() => macroTargets(targets), [targets]);
+    const microTarget = useMemo(() => microTargets(profile), [profile]);
     const days = useMemo(() => buildDays(meals), [meals]);
     const [start, end] = [addDaysIso(today, -6), today];
     const week = rangeDiet(days, start, end);
@@ -65,6 +67,10 @@ export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, o
     const todayFat = todayEntry?.fatG ?? null;
     const todaySugar = todayEntry?.sugarG ?? null;
     const todaySodium = todayEntry?.sodiumMg ?? null;
+    const todayMicro = todayEntry?.micro ?? null;
+    const microCovered = todayEntry
+        ? todayEntry.meals.filter((m) => MICRO_NUTRIENTS.some((n) => (m[n.key] ?? 0) > 0)).length
+        : 0;
     const proteinTarget = targets.protein ? Math.round((targets.protein[0] + targets.protein[1]) / 2) : null;
     const carbsTarget = macros.carbs ? Math.round((macros.carbs[0] + macros.carbs[1]) / 2) : null;
     const fatTarget = macros.fat ? Math.round((macros.fat[0] + macros.fat[1]) / 2) : null;
@@ -119,6 +125,11 @@ export default function DietPage({ profile, meals, onAdd, onRemove, onGoToday, o
           <CapBar label="脂肪" value={todayFat} target={fatTarget} unit="g"/>
           <CapBar label="糖" value={todaySugar} target={macros.sugarMax} unit="g"/>
           <CapBar label="钠" value={todaySodium} target={macros.sodiumMax} unit="mg"/>
+          <div className="small muted" style={{ marginTop: 10, marginBottom: 2 }}>微量元素（参考）</div>
+          {MICRO_NUTRIENTS.map((meta) => (<CapBar key={meta.key} label={meta.label} value={todayMicro?.[meta.key] ?? null} target={microTarget[meta.key]} unit={meta.unit}/>))}
+          <div className="faint small" style={{ marginTop: 4 }}>
+            今天 {todayEntry?.meals.length ?? 0} 条记录里 {microCovered} 条带微量元素；食物表只有 43/65 种有粗值，没覆盖的按未计处理。
+          </div>
         </div>) : null}
       </div>
 
@@ -233,10 +244,12 @@ function FoodLookup() {
         </button>) : null}
     </div>);
 }
-const EMPTY_NUMS = { kcal: '', protein: '', carbs: '', fat: '', sugar: '', sodium: '' };
+const EMPTY_NUMS = { kcal: '', protein: '', carbs: '', fat: '', sugar: '', sodium: '',
+    fiberG: '', calciumMg: '', ironMg: '', potassiumMg: '', vitaminDMcg: '', vitaminB12Mcg: '', magnesiumMg: '' };
 /** 表里的区间中点 → 表单里该填哪一格 */
 const NUT_FIELD = { protein: 'protein', carbs: 'carbs', fat: 'fat', sugar: 'sugar', salt: 'sodium' };
-const NUT_MAX = { kcal: 6000, protein: 600, carbs: 900, fat: 400, sugar: 400, sodium: 8000 };
+const NUT_MAX = { kcal: 6000, protein: 600, carbs: 900, fat: 400, sugar: 400, sodium: 8000,
+    fiberG: 500, calciumMg: 5000, ironMg: 200, potassiumMg: 10000, vitaminDMcg: 200, vitaminB12Mcg: 200, magnesiumMg: 2000 };
 function MealForm({ today, onAdd, onDone }) {
     const [date, setDate] = useState(today);
     const [slot, setSlot] = useState(() => {
@@ -254,10 +267,13 @@ function MealForm({ today, onAdd, onDone }) {
         const next = { ...nums, kcal: String(mid) };
         for (const x of est.nutrients)
             next[NUT_FIELD[x.key]] = String(Math.round((x.low + x.high) / 2));
+        for (const m of est.micros ?? [])
+            next[m.key] = String(m.value);
         setNums(next);
     };
     const save = () => {
-        const read = (key, allowZero) => {
+        const round1 = (v) => Math.round(v * 10) / 10;
+        const read = (key, allowZero, round = Math.round) => {
             const raw = nums[key].trim();
             if (raw === '')
                 return null;
@@ -266,7 +282,7 @@ function MealForm({ today, onAdd, onDone }) {
                 return null;
             if (!allowZero && v === 0)
                 return null;
-            return Math.min(NUT_MAX[key], Math.round(v));
+            return Math.min(NUT_MAX[key], round(v));
         };
         onAdd({
             id: uid('meal'),
@@ -280,6 +296,13 @@ function MealForm({ today, onAdd, onDone }) {
             fatG: read('fat', true),
             sugarG: read('sugar', true),
             sodiumMg: read('sodium', true),
+            fiberG: read('fiberG', true, round1),
+            calciumMg: read('calciumMg', true, round1),
+            ironMg: read('ironMg', true, round1),
+            potassiumMg: read('potassiumMg', true, round1),
+            vitaminDMcg: read('vitaminDMcg', true, round1),
+            vitaminB12Mcg: read('vitaminB12Mcg', true, round1),
+            magnesiumMg: read('magnesiumMg', true, round1),
             note: note.trim(),
             ts: new Date().toISOString()
         });
@@ -331,6 +354,12 @@ function MealForm({ today, onAdd, onDone }) {
                   {x.label} <b className="num">{x.low}–{x.high}</b> {x.unit}
                 </span>))}
             </div>
+            {est.micros.length ? (<div className="dt-hint-nuts">
+                <span>微量元素（{est.microCovered}/{est.items.length} 条有数据）</span>
+                {est.micros.map((m) => (<span key={m.key}>
+                    {m.label} <b className="num">{m.value}</b> {m.unit}
+                  </span>))}
+              </div>) : null}
             <button className="btn ghost dt-hint-btn" onClick={applyMid}>
               把中间值填到下面（{mid} kcal）
             </button>
@@ -348,6 +377,24 @@ function MealForm({ today, onAdd, onDone }) {
         {numField('sugar', '糖 g', '例：12')}
         {numField('sodium', '钠 mg', '例：1200')}
       </div>
+      <details style={{ marginTop: 8 }}>
+        <summary className="small muted">微量元素（可空，7 项；点上面的「填中间值」会自动带入有数据的项）</summary>
+        <div className="logrow">
+          {numField('fiberG', '膳食纤维 g', '例：8')}
+          {numField('calciumMg', '钙 mg', '例：300')}
+        </div>
+        <div className="logrow">
+          {numField('ironMg', '铁 mg', '例：6')}
+          {numField('potassiumMg', '钾 mg', '例：900')}
+        </div>
+        <div className="logrow">
+          {numField('vitaminDMcg', '维生素 D µg', '例：2.5')}
+          {numField('vitaminB12Mcg', '维生素 B12 µg', '例：1.2')}
+        </div>
+        <div className="logrow">
+          {numField('magnesiumMg', '镁 mg', '例：80')}
+        </div>
+      </details>
       <div className="field">
         <label>备注（可空）</label>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例：油很大 / 喝了一杯奶茶"/>
@@ -364,12 +411,17 @@ function MealForm({ today, onAdd, onDone }) {
 }
 /** 一条记录里填了哪几样就写哪几样，没填的不占位 */
 function mealNut(m) {
+    const micro = MICRO_NUTRIENTS
+        .filter((n) => (m[n.key] ?? 0) > 0)
+        .map((n) => `${n.label} ${m[n.key]} ${n.unit}`)
+        .join(' · ');
     return [
         m.proteinG ? `蛋白 ${m.proteinG} g` : '',
         m.carbsG ? `碳水 ${m.carbsG} g` : '',
         m.fatG ? `脂肪 ${m.fatG} g` : '',
         m.sugarG ? `糖 ${m.sugarG} g` : '',
-        m.sodiumMg ? `钠 ${m.sodiumMg} mg` : ''
+        m.sodiumMg ? `钠 ${m.sodiumMg} mg` : '',
+        micro
     ]
         .filter(Boolean)
         .join(' · ');

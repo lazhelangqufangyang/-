@@ -1,92 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Trophy } from 'lucide-react';
-import { apiRequest } from '../api/client';
-import { byId } from '../engine/exercises.js';
-import { partOf } from '../engine/logbook.js';
+import { ChevronDown, Trophy } from 'lucide-react';
+import { partBests } from '../engine/logbook.js';
 
 export type PRKey = 'chest' | 'back' | 'shoulders' | 'arms' | 'legs';
 
-export type PRData = {
-  name: string;
-  weight: number | null;
-  date: string;
+type PROption = {
+  label: string;
   color: string;
-  /** public/images 下的肌肉剪影图，例如 /images/chest.png */
+  /** public/images/pr 下的部位特写 */
   img: string;
+  /** 特写图还没就位时的兜底 */
+  fallback: string;
 };
 
-export const mockPRData: Record<PRKey, PRData> = {
-  chest: { name: '胸部卧推', weight: 100, date: '2026-10-15', color: '#E63946', img: '/images/chest.png' },
-  back: { name: '背部硬拉', weight: 120, date: '2026-11-01', color: '#3B82F6', img: '/images/back.png' },
-  shoulders: { name: '肩部推举', weight: 70, date: '2026-09-28', color: '#F59E0B', img: '/images/shoulders.png' },
-  arms: { name: '手臂弯举', weight: 45, date: '2026-10-22', color: '#A855F7', img: '/images/arms.png' },
-  legs: { name: '腿部深蹲', weight: 140, date: '2026-10-08', color: '#22C55E', img: '/images/legs.png' },
+const PR_PARTS: Record<PRKey, PROption> = {
+  chest: { label: '胸部', color: '#E63946', img: '/images/pr/chest.jpg', fallback: '/images/part-chest.jpg' },
+  back: { label: '背部', color: '#3B82F6', img: '/images/pr/back.jpg', fallback: '/images/part-back.jpg' },
+  shoulders: { label: '肩部', color: '#F59E0B', img: '/images/pr/shoulders.jpg', fallback: '/images/part-chest.jpg' },
+  arms: { label: '手臂', color: '#A855F7', img: '/images/pr/arms.jpg', fallback: '/images/part-arm.jpg' },
+  legs: { label: '腿部', color: '#22C55E', img: '/images/pr/legs.jpg', fallback: '/images/part-core.jpg' },
 };
 
-/**
- * 仅用于本地预览的兜底图：如果你已经把 chest.png / back.png 等放进
- * public/images，会优先使用 mockPRData.img；没有时自动退回这些旧图。
- * 正式图片准备好后可以删除这个常量。
- */
-const IMAGE_FALLBACKS: Record<PRKey, string> = {
-  chest: '/images/part-chest.jpg',
-  back: '/images/part-back.jpg',
-  shoulders: '/images/part-chest.jpg',
-  arms: '/images/part-arm.jpg',
-  legs: '/images/part-core.jpg',
-};
+const PR_KEYS = Object.keys(PR_PARTS) as PRKey[];
 
-const PR_TABS: { key: PRKey; label: string }[] = [
-  { key: 'chest', label: '胸部' },
-  { key: 'back', label: '背部' },
-  { key: 'shoulders', label: '肩部' },
-  { key: 'arms', label: '手臂' },
-  { key: 'legs', label: '腿部' },
-];
+type LogRow = { exId: string; name: string; unit: string; weight: number | null; reps: number; date: string; maxReps: number; maxRepsDate: string; sets: number };
 
-const PR_KEYS = PR_TABS.map((tab) => tab.key);
+const VISIBLE_ROWS = 3;
 
-/** 每个部位用哪一类动作算“最大重量”，写清楚才不会有人拿卧推跟深蹲比 */
-const PART_KEY: Record<string, PRKey> = { 胸: 'chest', 背: 'back', 肩: 'shoulders', 手臂: 'arms', 腿: 'legs', 臀: 'legs' };
-const LIFT_HINT: Record<PRKey, string> = { chest: '卧推', back: '硬拉', shoulders: '推举', arms: '弯举', legs: '深蹲' };
-/** 每个部位的代表动作：这一项的最重一次才是那一栏的主角 */
-const LIFT_PATTERN: Record<PRKey, RegExp> = {
-  chest: /卧推/,
-  back: /硬拉/,
-  shoulders: /推举|推肩/,
-  arms: /弯举/,
-  legs: /深蹲/,
-};
+function fmtDate(iso: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.slice(5) : '';
+}
 
-function normalizePRData(payload: unknown): Record<PRKey, PRData> {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('PR 数据格式不正确');
-  }
+function fmtUnit(unit: string) {
+  return unit === '每手kg' ? 'kg/手' : unit === 'kg' ? 'kg' : '';
+}
 
-  const root = (payload as { data?: unknown }).data ?? payload;
-  if (!root || typeof root !== 'object') {
-    throw new Error('PR 数据格式不正确');
-  }
-
-  const merged = { ...mockPRData };
-  for (const key of PR_KEYS) {
-    const item = (root as Record<string, unknown>)[key];
-    if (!item || typeof item !== 'object') continue;
-    const raw = item as Partial<PRData>;
-
-    merged[key] = {
-      name: typeof raw.name === 'string' && raw.name ? raw.name : mockPRData[key].name,
-      weight: Number.isFinite(Number(raw.weight))
-        ? Number(raw.weight)
-        : mockPRData[key].weight,
-      date: typeof raw.date === 'string' && raw.date ? raw.date : mockPRData[key].date,
-      color: typeof raw.color === 'string' && raw.color ? raw.color : mockPRData[key].color,
-      img: typeof raw.img === 'string' && raw.img ? raw.img : mockPRData[key].img,
-    };
-  }
-
-  return merged;
+/** 有重量写「30 kg/手 × 12」，自重只写「自重 × 15」 */
+function fmtBest(row: LogRow) {
+  if (row.weight === null) return `自重 × ${row.maxReps}`;
+  return `${row.weight} ${fmtUnit(row.unit)} × ${row.reps}`;
 }
 
 type Particle = {
@@ -295,228 +248,139 @@ function ParticleField({ color, burstKey }: { color: string; burstKey: number })
   return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;
 }
 
-function PRSkeleton({ className = '' }: { className?: string }) {
-  return (
-    <section
-      className={`relative h-[380px] overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_28px_80px_rgba(0,0,0,0.42)] ${className}`}
-      aria-busy="true"
-      aria-label="正在加载个人最好成绩"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(230,57,70,0.12),transparent_60%)]" />
-      <div className="relative z-20 animate-pulse px-4 pt-4">
-        <div className="flex items-center justify-between">
-          <div className="h-2.5 w-28 rounded bg-white/10" />
-          <div className="h-2.5 w-14 rounded bg-white/10" />
-        </div>
-        <div className="mt-3 flex gap-6">
-          {[28, 28, 28, 28, 28].map((width, index) => (
-            <div key={index} className="h-3 rounded bg-white/10" style={{ width }} />
-          ))}
-        </div>
-      </div>
-      <div className="absolute left-1/2 top-[42%] h-20 w-20 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border border-white/10 bg-white/5" />
-      <div className="absolute inset-x-4 bottom-4 animate-pulse rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-md">
-        <div className="h-2.5 w-24 rounded bg-white/10" />
-        <div className="mt-2 h-3 w-20 rounded bg-white/10" />
-        <div className="mt-3 h-10 w-28 rounded bg-white/10" />
-        <div className="absolute bottom-4 right-4 h-3 w-20 rounded bg-white/10" />
-      </div>
-    </section>
-  );
-}
-
 export default function PersonalRecord({
   className = '',
   logs = [],
 }: {
   className?: string;
-  logs?: { exId?: string; weightKg?: number | null; date?: string }[];
+  logs?: { exId?: string; weightKg?: number | null; reps?: number; date?: string; slotId?: string }[];
 }) {
-  const [prData, setPrData] = useState<Record<PRKey, PRData> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
   const [activeKey, setActiveKey] = useState<PRKey>('chest');
   const [burstKey, setBurstKey] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const load = async () => {
-      try {
-        const payload = await apiRequest<unknown>('/api/user/pr_data', {
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        setPrData(normalizePRData(payload));
-        setUsingFallback(false);
-      } catch {
-        if (controller.signal.aborted) return;
-        // 没登录 / 后端没起：不编假数据，改成本地记录里算出来的最好成绩
-        setPrData(null);
-        setUsingFallback(true);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-
-    void load();
-    return () => controller.abort();
-  }, []);
-
-  // 本机记过的组里算两套数：这一部位的代表动作（胸=卧推…）最重一次，以及该部位所有动作里最重的一次
-  const localBest = useMemo(() => {
-    const fixed: Partial<Record<PRKey, { name: string; weight: number; date: string }>> = {};
-    const overall: Partial<Record<PRKey, { name: string; weight: number; date: string }>> = {};
-    for (const log of logs) {
-      const weight = log?.weightKg;
-      if (!log?.exId || weight == null || !(weight > 0)) continue;
-      const ex = byId(log.exId);
-      if (!ex) continue;
-      const key = PART_KEY[partOf(ex)];
-      if (!key) continue;
-      const candidate = { name: ex.name, weight, date: log.date ?? '' };
-      if (!overall[key] || weight > overall[key]!.weight) overall[key] = candidate;
-      if (LIFT_PATTERN[key].test(ex.name) && (!fixed[key] || weight > fixed[key]!.weight)) {
-        fixed[key] = candidate;
-      }
-    }
-    return { fixed, overall };
-  }, [logs]);
-
-  const merged = useMemo(() => {
-    const out = {} as Record<PRKey, PRData>;
-    for (const key of PR_KEYS) {
-      const base = mockPRData[key];
-      const server = prData?.[key];
-      const local = localBest.fixed[key] ?? localBest.overall[key];
-      const best = server ?? local;
-      out[key] = best
-        ? { ...base, name: best.name, weight: best.weight, date: best.date }
-        : { ...base, weight: null, date: '', name: base.name };
-    }
-    return out;
-  }, [prData, localBest]);
-
-  if (loading) return <PRSkeleton className={className} />;
-
-  const activeData = merged[activeKey];
-  const hasRecord = activeData.weight !== null;
-  const hasAny = PR_KEYS.some((key) => merged[key].weight !== null);
-  const badge = prData ? 'PR / MAX' : hasAny ? '本地记录' : '还没有同步';
-  const partLabel = PR_TABS.find((tab) => tab.key === activeKey)?.label ?? '';
-  const overallBest = localBest.overall[activeKey];
-  const extraBest = overallBest && overallBest.name !== activeData.name ? overallBest : null;
+  // 榜单完全由本机记录算出：每个动作一行，取正式组里最重的一组和单组最高次数
+  const bests = useMemo(() => partBests(logs) as Record<PRKey, LogRow[]>, [logs]);
+  const rows = bests[activeKey];
+  const part = PR_PARTS[activeKey];
+  const hasAny = PR_KEYS.some((key) => bests[key].length > 0);
+  const top = rows[0] ?? null;
+  const rest = rows.slice(1, expanded ? rows.length : VISIBLE_ROWS);
+  const topDate = top ? fmtDate(top.weight === null ? top.maxRepsDate : top.date) : '';
 
   const selectPart = (key: PRKey) => {
     if (key === activeKey) return;
     setActiveKey(key);
+    setExpanded(false);
     setBurstKey((value) => value + 1);
   };
 
   return (
     <section
-      className={`relative h-[380px] select-none overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_28px_80px_rgba(0,0,0,0.42)] ${className}`}
+      className={`relative select-none overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_28px_80px_rgba(0,0,0,0.42)] ${className}`}
       aria-label="个人最好成绩"
     >
-      {/* 边框微光与暗色网格 */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: `radial-gradient(circle at 50% 42%, ${activeData.color}26, transparent 60%)` }}
-      />
-
-      {/* 底层肌肉剪影：图片在 Canvas 下面，切换部位时淡入淡出 */}
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={activeKey}
-            src={activeData.img}
-            alt={`${activeData.name}肌肉剪影`}
-            initial={{ opacity: 0, scale: 1.08 }}
-            animate={{ opacity: 0.48, scale: 1.02 }}
-            exit={{ opacity: 0, scale: 1.08 }}
-            transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-            style={{ filter: 'grayscale(1) contrast(1.15) brightness(0.62)' }}
-            onError={(event) => {
-              const image = event.currentTarget;
-              // 新图片还没就位时，优先退回项目里已有的部位图，避免整张卡片空掉。
-              if (!image.dataset.fallback) {
-                image.dataset.fallback = '1';
-                image.src = IMAGE_FALLBACKS[activeKey];
-                return;
-              }
-              image.style.visibility = 'hidden';
-            }}
-          />
-        </AnimatePresence>
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-slate-950/70" />
+      <div className="relative h-[300px] overflow-hidden">
+        {/* 边框微光与暗色网格 */}
         <div
-          className="absolute inset-0 opacity-25 mix-blend-color"
-          style={{ background: `radial-gradient(circle at 50% 42%, ${activeData.color}, transparent 64%)` }}
+          className="pointer-events-none absolute inset-0"
+          style={{ background: `radial-gradient(circle at 50% 42%, ${part.color}26, transparent 60%)` }}
         />
-      </div>
 
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.08]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px)',
-          backgroundSize: '38px 38px',
-          maskImage: 'radial-gradient(circle at center, black, transparent 78%)',
-          WebkitMaskImage: 'radial-gradient(circle at center, black, transparent 78%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-x-10 top-0 h-px"
-        style={{ background: `linear-gradient(90deg, transparent, ${activeData.color}aa, transparent)` }}
-      />
-
-      <ParticleField color={activeData.color} burstKey={burstKey} />
-
-      <div className="relative z-20 px-4 pt-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
-            PERSONAL RECORD
-          </span>
-          <span className={`font-mono text-[9px] tracking-[0.12em] ${prData ? 'text-white/25' : 'text-amber-300/60'}`}>
-            {badge}
-          </span>
+        {/* 该部位的特写：切换时淡入，并在 7 秒里缓慢推近 */}
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={activeKey}
+              src={part.img}
+              alt={`${part.label}训练特写`}
+              initial={{ opacity: 0, scale: 1 }}
+              animate={{ opacity: 0.55, scale: 1.1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              transition={{ opacity: { duration: 0.45 }, scale: { duration: 7, ease: 'linear' } }}
+              className="absolute inset-0 h-full w-full object-cover object-center"
+              style={{ filter: 'saturate(0.92) contrast(1.06) brightness(0.72)' }}
+              onError={(event) => {
+                const image = event.currentTarget;
+                // 特写图还没就位时退回项目里已有的部位图，避免整块空掉
+                if (!image.dataset.fallback) {
+                  image.dataset.fallback = '1';
+                  image.src = part.fallback;
+                  return;
+                }
+                image.style.visibility = 'hidden';
+              }}
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-slate-950/70" />
+          <div
+            className="absolute inset-0 opacity-25 mix-blend-color"
+            style={{ background: `radial-gradient(circle at 50% 42%, ${part.color}, transparent 64%)` }}
+          />
         </div>
 
-        <div className="no-scrollbar mt-3 flex gap-6 overflow-x-auto" role="tablist" aria-label="选择训练部位">
-          {PR_TABS.map((tab) => {
-            const selected = activeKey === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => selectPart(tab.key)}
-                style={{ background: 'transparent', border: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0 }}
-                className={`relative shrink-0 appearance-none pb-2 text-xs font-bold transition-colors ${
-                  selected ? 'text-white' : 'text-white/40 hover:text-white/70'
-                }`}
-              >
-                {tab.label}
-                {selected && (
-                  <motion.span
-                    layoutId="personal-record-tab"
-                    className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
-                    style={{ backgroundColor: activeData.color }}
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
-              </button>
-            );
-          })}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.08]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px)',
+            backgroundSize: '38px 38px',
+            maskImage: 'radial-gradient(circle at center, black, transparent 78%)',
+            WebkitMaskImage: 'radial-gradient(circle at center, black, transparent 78%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-x-10 top-0 h-px"
+          style={{ background: `linear-gradient(90deg, transparent, ${part.color}aa, transparent)` }}
+        />
+
+        <ParticleField color={part.color} burstKey={burstKey} />
+
+        <div className="relative z-20 px-4 pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
+              PERSONAL RECORD
+            </span>
+            <span className="font-mono text-[9px] tracking-[0.12em] text-amber-300/60">
+              {hasAny ? '本地记录' : '还没有记录'}
+            </span>
+          </div>
+
+          <div className="no-scrollbar mt-3 flex gap-6 overflow-x-auto" role="tablist" aria-label="选择训练部位">
+            {PR_KEYS.map((key) => {
+              const selected = activeKey === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => selectPart(key)}
+                  style={{ background: 'transparent', border: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0 }}
+                  className={`relative shrink-0 appearance-none pb-2 text-xs font-bold transition-colors ${
+                    selected ? 'text-white' : 'text-white/40 hover:text-white/70'
+                  }`}
+                >
+                  {PR_PARTS[key].label}
+                  {selected && (
+                    <motion.span
+                      layoutId="personal-record-tab"
+                      className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                      style={{ backgroundColor: part.color }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[9px] font-medium leading-relaxed text-white/30">
+            按主动肌归到五个部位，只算正式组；自重动作只看次数
+          </p>
         </div>
-        <p className="mt-1.5 text-[9px] font-medium leading-relaxed text-white/30">
-          {partLabel}看的是「{LIFT_HINT[activeKey]}」这类动作里最重的一次
-        </p>
       </div>
 
-      <div className="absolute inset-x-4 bottom-4 z-20">
+      <div className="relative z-20 px-4 pb-4">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeKey}
@@ -524,58 +388,97 @@ export default function PersonalRecord({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md"
-            style={{ borderColor: `${activeData.color}33` }}
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/45 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md"
+            style={{ borderColor: `${part.color}33` }}
             aria-live="polite"
           >
             <div
               className="absolute left-0 top-4 h-8 w-0.5 rounded-r-full"
-              style={{ backgroundColor: activeData.color }}
+              style={{ backgroundColor: part.color }}
             />
-            <div className="flex items-end justify-between gap-4">
-              <div className="min-w-0">
+
+            {!top ? (
+              <>
                 <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/40">
-                  <Trophy size={11} style={{ color: activeData.color }} />
+                  <Trophy size={11} style={{ color: part.color }} />
                   PERSONAL BEST
                 </div>
-                {!hasRecord ? (
-                  <>
-                    <p className="mt-1 truncate text-sm font-bold text-white/75">还没有记录</p>
-                    <p className="mt-1 text-[10px] font-medium leading-relaxed text-white/40">
-                      练完一次训练，这里就会留下你的最好成绩
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 truncate text-xs font-medium text-white/55">
-                      {activeData.name} · 最重一次
-                    </p>
+                <p className="mt-1 text-sm font-bold text-white/75">{part.label}还没有记录</p>
+                <p className="mt-1 text-[10px] font-medium leading-relaxed text-white/40">
+                  练完一次训练，这个部位的每个动作都会留下最好成绩
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/40">
+                      <Trophy size={11} style={{ color: part.color }} />
+                      {part.label} · 最重一次
+                    </div>
+                    <p className="mt-1 truncate text-xs font-medium text-white/55">{top.name}</p>
                     <p
-                      className="mt-0.5 text-5xl font-black leading-none tracking-tight"
+                      className="mt-0.5 text-4xl font-black leading-none tracking-tight"
                       style={{
-                        color: activeData.color,
-                        textShadow: `0 0 22px ${activeData.color}88, 0 0 52px ${activeData.color}44`,
+                        color: part.color,
+                        textShadow: `0 0 22px ${part.color}88, 0 0 52px ${part.color}44`,
                       }}
                     >
-                      {activeData.weight}
-                      <span className="ml-1 text-sm font-bold tracking-normal text-white/45">kg</span>
+                      {top.weight === null ? top.maxReps : top.weight}
+                      <span className="ml-1 text-sm font-bold tracking-normal text-white/45">
+                        {top.weight === null ? '次' : fmtUnit(top.unit)}
+                      </span>
                     </p>
-                    {extraBest && (
-                      <p className="mt-1.5 truncate text-[10px] font-medium text-white/40">
-                        {partLabel}最重的一次：{extraBest.name} {extraBest.weight} kg
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
+                    <p className="mt-1.5 text-[10px] font-medium text-white/40">
+                      {top.weight === null ? '自重动作' : `× ${top.reps} 次`} · 单组最高 {top.maxReps} 次
+                    </p>
+                  </div>
 
-              {hasRecord && (
-                <div className="shrink-0 pb-0.5 text-right">
-                  <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">突破于</p>
-                  <p className="mt-1 font-mono text-[11px] font-medium text-white/55">{activeData.date}</p>
+                  {topDate && (
+                    <div className="shrink-0 pb-0.5 text-right">
+                      <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-white/35">突破于</p>
+                      <p className="mt-1 font-mono text-[11px] font-medium text-white/55">{topDate}</p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {rest.length > 0 && (
+                  <div className="mt-3 border-t border-white/10">
+                    {rest.map((row) => (
+                      <div
+                        key={row.exId}
+                        className="flex items-center gap-3 border-b border-white/[0.06] py-2.5 last:border-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] font-bold text-white/80">{row.name}</p>
+                          <p className="mt-0.5 text-[9px] text-white/35">
+                            单组最高 {row.maxReps} 次
+                            {fmtDate(row.date) ? ` · ${fmtDate(row.date)}` : ''}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-xs font-black" style={{ color: part.color }}>
+                          {fmtBest(row)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {rows.length > VISIBLE_ROWS && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((value) => !value)}
+                    className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-bold text-white/45 transition-colors hover:text-white/75"
+                  >
+                    {expanded ? '收起' : `展开全部 ${rows.length} 个动作`}
+                    <ChevronDown
+                      size={12}
+                      className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                )}
+              </>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>

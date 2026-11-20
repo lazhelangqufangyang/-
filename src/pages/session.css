@@ -177,6 +177,25 @@
   color: var(--sess-red-deep);
 }
 
+.sess-check {
+  appearance: none;
+  flex: none;
+  margin-left: auto;
+  padding: 6px 11px;
+  border: 1px solid var(--sess-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--sess-red-deep);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.sess-check:active {
+  transform: scale(0.96);
+  background: #fdecee;
+}
+
 .sess-sets {
   display: flex;
   flex-direction: column;

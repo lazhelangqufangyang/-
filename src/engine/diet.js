@@ -1,6 +1,7 @@
 import { baselineAdvice } from './lifestyle.js';
 import { weekdayName } from './goals.js';
 import { todayIso, weekdayOf } from './time.js';
+import { MICRO_NUTRIENTS } from './foodMicro.js';
 /**
  * 吃的这一层只做得两件算得出的事：按档案给一个带误差说明的热量参考区间和底线，
  * 以及把你手记的估算按周平均起来。热量是你自己估的，这里不当营养测算用，
@@ -81,6 +82,11 @@ export function buildDays(meals) {
             fatG: sum((m) => m.fatG),
             sugarG: sum((m) => m.sugarG),
             sodiumMg: sum((m) => m.sodiumMg),
+            // 微量元素只加真的记过数的那几条，保留一位小数
+            micro: Object.fromEntries(MICRO_NUTRIENTS.map((meta) => [
+                meta.key,
+                Math.round(list.reduce((total, m) => total + (m[meta.key] ?? 0), 0) * 10) / 10
+            ])),
             counted: counted.length,
             uncounted: list.length - counted.length,
             partial: counted.length === 1

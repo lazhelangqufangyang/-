@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { checkHealth, closeAccount, createProOrder, logOut, orderStatus, readPlan, readSession, sessionToken, signInHref, signInWithPassword } from '../api/account.js';
+import { checkHealth, closeAccount, createProOrder, logOut, orderStatus, readPlan, readSession, refreshOrder, sessionToken, signInHref, signInWithPassword } from '../api/account.js';
 /** 跳去收银台之前记下这一单，回来时用它查一次到账 */
 const ORDER_KEY = 'fitplan.order';
 function when(v) {
@@ -14,7 +14,7 @@ function day(v) {
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('zh-CN');
 }
-export default function AccountCard() {
+export default function AccountCard({ onLoggedIn }) {
     const [health, setHealth] = useState(null);
     const [acct, setAcct] = useState(null);
     const [plan, setPlan] = useState(null);
@@ -31,6 +31,7 @@ export default function AccountCard() {
             await signInWithPassword(path, name.trim(), password);
             setPassword('');
             await refresh();
+            onLoggedIn?.();
         }
         catch (e) {
             setAuthMsg(e.message);
@@ -77,22 +78,48 @@ export default function AccountCard() {
     useEffect(() => {
         void refresh();
     }, [refresh]);
-    // 从收银台回来：发货只认支付宝的异步通知，这里问一句让它早点看得见
+    // 从收银台回来：先读本地状态，再主动查单兜底；成功、关闭、退款、未确认各有各的文案
     useEffect(() => {
         const no = localStorage.getItem(ORDER_KEY);
         if (!no)
             return;
-        void orderStatus(no)
-            .then((s) => {
-            if (s.status !== 'paid')
+        let cancelled = false;
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        void (async () => {
+            let state = await orderStatus(no).catch((e) => {
+                if (e && (e.status === 403 || e.status === 404))
+                    localStorage.removeItem(ORDER_KEY);
+                return null;
+            });
+            if (cancelled || !state)
                 return;
-            localStorage.removeItem(ORDER_KEY);
-            setMsg('这一单到账了。');
-            void refresh();
-        })
-            .catch(() => {
-            /* 离线或后端没起：下次进来再问 */
-        });
+            for (let i = 0; i < 3 && state.status !== 'paid' && state.status !== 'closed' && !cancelled; i += 1) {
+                await sleep(2000);
+                state = await refreshOrder(no).catch(() => state);
+                if (cancelled)
+                    return;
+            }
+            if (state.refundStatus === 'refunded') {
+                localStorage.removeItem(ORDER_KEY);
+                await refresh();
+                setMsg('这一单已退款到支付宝，Pro 权益已收回。');
+            }
+            else if (state.status === 'paid') {
+                localStorage.removeItem(ORDER_KEY);
+                await refresh();
+                setMsg('这一单到账了。');
+            }
+            else if (state.status === 'closed') {
+                localStorage.removeItem(ORDER_KEY);
+                setMsg('交易已关闭，没有扣款。');
+            }
+            else {
+                setMsg('支付结果还没回来，稍后会自动到账，也可以点「重新读一遍」再查。');
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, [refresh]);
     const buy = async () => {
         setBusy(true);
@@ -181,7 +208,7 @@ export default function AccountCard() {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="3–32 个字符，例：lin_01"/>
           </div>
           <div className="field">
-            <label>口令</label>
+            <label>密码</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 8 位，不能全是数字"/>
           </div>
           <div className="btnbar">
@@ -194,7 +221,7 @@ export default function AccountCard() {
           </div>
           {authMsg ? <div className="missing">{authMsg}</div> : null}
           <div className="faint small">
-            库里存的是口令的散列，明文不落库，忘了找不回来 —— 本机的 JSON 导出永远是保底。
+            库里存的是密码的散列，明文不落库，忘了找不回来 —— 本机的 JSON 导出永远是保底。
           </div>
         </div>) : null}
 

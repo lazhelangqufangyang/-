@@ -13,12 +13,15 @@ import OnboardingPage from './pages/OnboardingPage.jsx';
 import TrainingPage from './pages/TrainingPage.jsx';
 import SessionPage from './pages/SessionPage.jsx';
 import RecordPage from './pages/RecordPage.jsx';
+import TrendsPage from './pages/TrendsPage.jsx';
 import DietPage from './pages/DietPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage';
 import MovesPage from './pages/MovesPage';
 import PickPage from './pages/PickPage.jsx';
 import PlanPage from './pages/PlanPage.jsx';
+import AdminPage from './pages/AdminPage.jsx';
 import { pickUpTokenFromHash, sessionToken } from './api/account.js';
 import { weekdayName } from './engine/goals.js';
 const NAV_TABS = [
@@ -70,7 +73,7 @@ function TabIco({ name }) {
     </svg>);
 }
 /** 可以路由到的第一级；session、pick、plan 和 setup 不在底部导航里 */
-const ROUTES = ['train', 'moves', 'log', 'diet', 'settings', 'session', 'pick', 'plan'];
+const ROUTES = ['train', 'moves', 'log', 'diet', 'settings', 'session', 'pick', 'plan', 'trends'];
 /** 设置里的模块，每个都是一个子页面 */
 const SETTINGS_MODULES = ['profile', 'account', 'data', 'safety'];
 const TITLES = {
@@ -89,6 +92,12 @@ function normalize(hash, onboarded) {
     // 分步表单要能自己走进去：首屏点了「自动生成训练清单」就是这儿
     if (head === 'setup')
         return 'setup';
+    // 管理端独立入口：不要求用户登录/建档，也不进底部导航
+    if (head === 'admin')
+        return 'admin';
+    // 登录页同样不要求先建档：新设备上也能直接把账号登进来
+    if (head === 'login')
+        return 'login';
     if (!onboarded)
         return 'welcome';
     // 老的「今天」「周框架」两个标签合成一个「运动」，「档案」搬进设置，「问」这一页整个删了
@@ -103,17 +112,56 @@ function normalize(hash, onboarded) {
     return ROUTES.includes(head) ? head : 'train';
 }
 export default function App() {
-    const [splash, setSplash] = useState(true);
+    // 开发控制台会带 ?__dev=：直接进应用，不用每次再点一次开屏
+    const [splash, setSplash] = useState(() => !isAdminHash() && !(import.meta.env.DEV && new URLSearchParams(window.location.search).has('__dev')));
+    // 直接打开 #/admin 时不放用户开屏；从别处跳到管理端时也把开屏收掉
+    useEffect(() => {
+        const onHash = () => {
+            if (isAdminHash())
+                setSplash(false);
+        };
+        window.addEventListener('hashchange', onHash);
+        return () => window.removeEventListener('hashchange', onHash);
+    }, []);
     return (<>
       {splash ? <SplashPage onEnter={() => setSplash(false)} /> : null}
       <AppInner />
     </>);
 }
+function isAdminHash() {
+    return /^#\/admin(\/|$)/.test(window.location.hash || '');
+}
+/** 桌面左侧导航：只在 ≥1024px 出现，手机上仍走底部 Tab */
+function DesktopSide({ tab, isLoggedIn, onGo, onLogin }) {
+    return (<aside className="desktop-side" aria-label="桌面导航">
+      <div className="side-brand">
+        <span>LIAN · FITPLAN</span>
+        <b>练</b>
+      </div>
+      <nav className="side-nav">
+        {NAV_TABS.map((t) => (<button key={t.href} aria-current={tab === t.href.replace('#/', '') ? 'page' : undefined} onClick={() => onGo(t.href)}>
+            <TabIco name={t.ico}/>
+            <span>{t.label}</span>
+          </button>))}
+      </nav>
+      <div className="side-account">
+        <span className={`side-dot${isLoggedIn ? ' on' : ''}`} aria-hidden="true"/>
+        <div className="side-account-text">
+          <b>{isLoggedIn ? '已登录' : '未登录'}</b>
+          <small>{isLoggedIn ? '账号与云端备份' : '登录后同步订阅'}</small>
+        </div>
+        <button onClick={() => (isLoggedIn ? onGo('#/settings') : onLogin())}>
+          {isLoggedIn ? '账号' : '登录'}
+        </button>
+      </div>
+      <p className="side-foot">训练记录默认只存在这台设备</p>
+    </aside>);
+}
 function AppInner() {
     const [state, setState] = useState(() => loadState());
     const [isLoggedIn, setIsLoggedIn] = useState(() => {
         try {
-            return Boolean(sessionToken()) || localStorage.getItem('fitplan.mockAuth') === '1';
+            return Boolean(sessionToken());
         }
         catch {
             return false;
@@ -121,7 +169,12 @@ function AppInner() {
     });
     /** 登录过就不再把开头的欢迎页顶出来：换了设备登同一个账号也是直接进运动页 */
     const entered = state.onboardingDone || isLoggedIn;
-    const [route, setRoute] = useState(() => normalize(window.location.hash, entered));
+    const [route, setRoute] = useState(() => {
+        const next = normalize(window.location.hash, entered);
+        // 桌面第一次打开、既没建档也没登录时，先停在登录页；手机上仍从欢迎页开始
+        const desktop = typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches;
+        return !entered && desktop ? 'login' : next;
+    });
     const tabRef = useRef(tabOfRoute(route));
     /** 记一条运动时，动作要去「动作」页挑；这里存着还没提交的那一条 */
     const [recPick, setRecPick] = useState(null);
@@ -435,23 +488,7 @@ function AppInner() {
         addActivity(a);
         clearRecPick();
     }, [addActivity, clearRecPick]);
-    /** 没有真实登录接口时，用本地标记模拟登录，便于测试游客/登录两种状态 */
-    const mockLogin = useCallback(() => {
-        try {
-            localStorage.setItem('fitplan.mockAuth', '1');
-        }
-        catch {
-            /* 隐私模式下仍允许本次会话登录 */
-        }
-        setIsLoggedIn(true);
-    }, []);
     const handleLogout = useCallback(() => {
-        try {
-            localStorage.removeItem('fitplan.mockAuth');
-        }
-        catch {
-            /* ignore */
-        }
         setIsLoggedIn(false);
     }, []);
     const removeActivity = useCallback((id) => {
@@ -475,6 +512,16 @@ function AppInner() {
     const removeMeal = useCallback((id) => {
         setState((s) => ({ ...s, mealLogs: s.mealLogs.filter((x) => x.id !== id) }));
     }, []);
+    /** 同一天再记一次体重/腰围就覆盖那一天，不堆重复点 */
+    const saveMeasure = useCallback((entry) => {
+        setState((s) => ({
+            ...s,
+            measureLogs: [
+                ...s.measureLogs.filter((x) => x.date !== entry.date),
+                entry
+            ].sort((a, b) => a.date.localeCompare(b.date))
+        }));
+    }, []);
     const saveSettings = useCallback((settings) => patch({ settings }), [patch]);
     const importState = useCallback((next) => {
         setState(next);
@@ -488,6 +535,13 @@ function AppInner() {
     if (route === 'setup') {
         return <OnboardingPage initial={state.profile} settings={state.settings} favorites={state.favorites} editing={false} onDone={finishOnboarding}/>;
     }
+    // 独立登录页：整屏，不套底部导航；登录成功后回运动页
+    if (route === 'login') {
+        return (<LoginPage onBack={() => go('#/train')} onLoggedIn={() => {
+                setIsLoggedIn(true);
+                go('#/train');
+            }}/>);
+    }
     // 「我的档案」搬进设置了，但它本身是整屏的分步表单，跟训练执行页一样不套底部导航
     if (route === 'settings/profile') {
         return (<OnboardingPage initial={state.profile} settings={state.settings} favorites={state.favorites} editing onExit={() => go('#/settings')} onDone={(profile, _goal, framework) => {
@@ -495,14 +549,20 @@ function AppInner() {
                 go('#/settings');
             }}/>);
     }
+    // 管理端整屏独立，不套用户底部导航
+    if (route === 'admin') {
+        return <AdminPage />;
+    }
     const tab = route.split('/')[0];
     const isTrain = tab === 'train';
     const isBarePage = route === 'log' || route === 'settings' || route === 'moves';
+    const fullPage = route === 'trends' || route === 'session' || route === 'pick' || route === 'plan';
     const weekNo = state.framework
         ? Math.min(state.framework.weeksTotal, Math.floor((Date.now() - new Date(`${state.framework.startDate}T00:00:00`).getTime()) / 86400000 / 7) + 1)
         : null;
-    return (<div className="app">
-      {route === 'session' ? (<SessionPage sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoPick={openPick}/>) : route === 'pick' ? (<PickPage profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPage framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
+    return (<div className={`app${fullPage ? '' : ' app-shell'}`}>
+      {route === 'trends' ? (<TrendsPage state={state} onBack={() => go('#/log')} onSaveMeasure={saveMeasure}/>) : route === 'session' ? (<SessionPage sheet={sheet} profile={state.profile} settings={state.settings} logs={state.setLogs} onSwap={swap} onSkip={toggleSkip} onAddSet={addSet} onCutSet={cutSet} onDropSet={dropSet} onAddLogs={addLogs} onExit={() => go('#/train')} onGoPick={openPick}/>) : route === 'pick' ? (<PickPage profile={state.profile} picked={pickedToday} favorites={state.favorites} onToggle={togglePick} onDone={() => go('#/session')}/>) : route === 'plan' ? (<PlanPage framework={state.framework} wantAreas={wantAreasOf(sheet?.input ?? { totalMinutes: null, wantArea: null })} todayFocus={state.weekPlan?.days?.[today]?.focus ?? sheet?.focus ?? ''} free={sheet?.input.free ?? false} onBack={() => go('#/train')} onGenerate={overrideToday}/>) : (<>
+          <DesktopSide tab={tab} isLoggedIn={isLoggedIn} onGo={go} onLogin={() => go('#/login')}/>
           {!isBarePage && (<header className={`topbar${isTrain ? ' train-head' : ''}`}>
             <div>
               <h1>{TITLES[route] ?? TITLES[tab] ?? '运动'}</h1>
@@ -517,10 +577,10 @@ function AppInner() {
           <main className="screen" style={isBarePage ? { padding: 0, maxWidth: 'none' } : undefined}>
             {tab === 'train' ? (<TrainingPage profile={state.profile} sheet={sheet} weekPlan={state.weekPlan} favorites={state.favorites} logs={state.setLogs} picked={pickedToday} onSkip={toggleSkip} onReorder={reorder} onRegenerateFramework={regenerateFramework} onStart={startWorkout} onStartDirect={startDirect} onGoPlan={() => go('#/plan')} onGoSetup={() => go('#/setup')} onGoMoves={() => go('#/moves')} onTogglePick={togglePick}/>) : null}
             {tab === 'moves' ? (<MovesPage picked={pickedToday} onTogglePick={togglePick} favorites={state.favorites} onToggleFavorite={toggleFavorite} recPicked={recPick ? recPick.exIds : null} recDate={recPick?.date ?? ''} onToggleRecPick={toggleRecPick} onFinishRecPick={endRecPick}/>) : null}
-            {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onDismissPick={clearRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')}/>) : null}
+            {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onDismissPick={clearRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')} onOpenTrends={() => go('#/trends')}/>) : null}
             {tab === 'diet' ? (<DietPage profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (route === 'settings'
-                ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)} logs={state.setLogs}/>
+                ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={() => go('#/settings/account')} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)} logs={state.setLogs} bodyProfile={state.profile}/>
                 : (<SettingsPage state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">

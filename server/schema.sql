@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 
 -- 订单：金额按「分」存，对账时只认这个整数，不认前端回传的任何数。
 -- 发货靠支付宝的异步通知，status 从 created 走到 paid 只有一次机会（WHERE status='created'）。
+-- 退款是独立维度：status 保留支付事实，refund_status 单独记退款，避免把 paid 覆盖掉。
 CREATE TABLE IF NOT EXISTS orders (
   out_trade_no VARCHAR(40) NOT NULL COMMENT '本机生成的订单号，支付宝原样带回',
   user_id BIGINT UNSIGNED NOT NULL,
@@ -44,12 +45,59 @@ CREATE TABLE IF NOT EXISTS orders (
   amount_cent INT UNSIGNED NOT NULL COMMENT '成交价（分）：通知里的 total_amount 必须等于它',
   status ENUM('created','paid','closed') NOT NULL DEFAULT 'created',
   trade_no VARCHAR(64) NULL COMMENT '支付宝交易号，退款和对账要用',
+  buyer_id VARCHAR(64) NULL COMMENT '支付宝 buyer_id，通知或查单回来记下，只做对认人',
+  refund_status ENUM('none','refunded') NOT NULL DEFAULT 'none',
+  refund_cent INT UNSIGNED NULL COMMENT '实际退款金额（分）',
+  refunded_at DATETIME NULL,
+  refund_request_no VARCHAR(64) NULL COMMENT '传给支付宝的 out_request_no，全额退款时等于订单号',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   paid_at DATETIME NULL,
   PRIMARY KEY (out_trade_no),
   KEY idx_orders_user (user_id),
   KEY idx_orders_status (status, created_at),
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 管理员：和用户完全是两套账号、两套会话，不在 users 上加角色列。
+-- 账号只在后端启动时从环境变量种子一次，没有注册接口；口令与用户同一套 PBKDF2 散列。
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  login_name VARCHAR(64) NOT NULL,
+  password_hash VARCHAR(160) NOT NULL,
+  disabled TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_admin_login_name (login_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash CHAR(64) NOT NULL COMMENT 'sha256(管理员会话令牌) 的十六进制；令牌本身不落库',
+  admin_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  PRIMARY KEY (token_hash),
+  KEY idx_admin_sessions_admin (admin_id),
+  CONSTRAINT fk_admin_sessions_admin FOREIGN KEY (admin_id) REFERENCES admin_users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=ascii COLLATE=ascii_bin;
+
+-- 审计：每一次权益变更都要能回答「谁、何时、对谁、改了什么、为什么」。
+-- 故意不建外键：用户或管理员被删之后，这条记录仍然要读得懂，所以存 admin_login 快照。
+CREATE TABLE IF NOT EXISTS admin_audit (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  admin_id BIGINT UNSIGNED NOT NULL,
+  admin_login VARCHAR(64) NOT NULL,
+  action VARCHAR(32) NOT NULL COMMENT 'sync_deliver / refund / grant / revoke',
+  out_trade_no VARCHAR(40) NULL,
+  target_user_id BIGINT UNSIGNED NULL,
+  before_json JSON NULL,
+  after_json JSON NULL,
+  reason VARCHAR(500) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_admin_audit_time (created_at),
+  KEY idx_admin_audit_order (out_trade_no),
+  KEY idx_admin_audit_user (target_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 往下的表是一个登录用户的记录。删掉账号（/api/account）会顺着外键把这里全清掉。
@@ -183,6 +231,13 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   fat_g DECIMAL(7,1) NULL,
   sugar_g DECIMAL(7,1) NULL,
   sodium_mg INT UNSIGNED NULL,
+  fiber_g DECIMAL(7,1) NULL COMMENT '膳食纤维，每份粗值',
+  calcium_mg DECIMAL(8,1) NULL,
+  iron_mg DECIMAL(6,1) NULL,
+  potassium_mg DECIMAL(8,1) NULL,
+  vitamin_d_mcg DECIMAL(7,1) NULL,
+  vitamin_b12_mcg DECIMAL(7,1) NULL,
+  magnesium_mg DECIMAL(8,1) NULL,
   note VARCHAR(1000) NULL,
   logged_ts CHAR(32) NOT NULL,
   uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

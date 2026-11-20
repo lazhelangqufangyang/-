@@ -1,9 +1,11 @@
 package com.fitplan.web;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fitplan.config.ApiException;
 import com.fitplan.config.FitplanProperties;
 import com.fitplan.service.AccountService;
 import com.fitplan.service.JsonUtil;
+import com.fitplan.service.OrderSyncService;
 import com.fitplan.service.PayService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,11 +31,13 @@ public class PayController {
     private final AccountService account;
     private final PayService pay;
     private final FitplanProperties props;
+    private final OrderSyncService sync;
 
-    public PayController(AccountService account, PayService pay, FitplanProperties props) {
+    public PayController(AccountService account, PayService pay, FitplanProperties props, OrderSyncService sync) {
         this.account = account;
         this.pay = pay;
         this.props = props;
+        this.sync = sync;
     }
 
     @PostMapping("/api/pay/order")
@@ -60,7 +65,7 @@ public class PayController {
         return out;
     }
 
-    // 从收银台回来时页面问一句「这单算上了没有」；发货本身只认异步通知，这里只是让它早点看得见
+    // 从收银台回来时页面问一句「这单算上了没有」；发货本身只认异步通知或主动查单，这里只读本地
     @GetMapping("/api/pay/order")
     public Map<String, Object> orderStatus(@RequestParam(value = "out_trade_no", required = false) String outTradeNo,
                                            HttpServletRequest request) {
@@ -69,10 +74,45 @@ public class PayController {
         if (order != null && orderUserId(order) != AccountService.userIdOf(user)) {
             throw new ApiException(403, "这不是你的订单");
         }
+        return orderState(order, account.userPlanRow(AccountService.userIdOf(user)));
+    }
+
+    /**
+     * 用户回跳后的兜底查单：通知还没到就主动问支付宝一次。
+     * 每单 10 秒只允许查一次，避免页面轮询把网关调用打爆。
+     */
+    @PostMapping("/api/pay/order/refresh")
+    public Map<String, Object> refreshOrder(@RequestBody(required = false) JsonNode body,
+                                            HttpServletRequest request) {
+        Map<String, Object> user = account.requireUser(TokenSupport.bearer(request), "没有有效会话");
+        String outTradeNo = JsonUtil.text(body, "outTradeNo");
+        Map<String, Object> order = account.getOrder(outTradeNo);
+        if (order == null || orderUserId(order) != AccountService.userIdOf(user)) {
+            throw new ApiException(404, "没有这个订单");
+        }
+        if (!sync.tryAcquire(outTradeNo, 10)) {
+            throw new ApiException(429, "查得太勤了，10 秒后再试。");
+        }
+        OrderSyncService.SyncOutcome outcome = sync.sync(order);
+        Map<String, Object> fresh = account.getOrder(outTradeNo);
+        Map<String, Object> freshUser = account.userPlanRow(AccountService.userIdOf(user));
+        Map<String, Object> out = orderState(fresh, freshUser);
+        out.put("alipayStatus", outcome.alipayStatus());
+        out.put("verdict", outcome.verdict());
+        out.put("changed", outcome.changed());
+        out.put("amountMatch", outcome.amountMatch());
+        return out;
+    }
+
+    private Map<String, Object> orderState(Map<String, Object> order, Map<String, Object> user) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", order == null ? "none" : String.valueOf(order.get("status")));
+        out.put("refundStatus", order == null || order.get("refund_status") == null
+            ? "none" : String.valueOf(order.get("refund_status")));
+        out.put("refundedAt", order == null ? null : JsonUtil.iso(order.get("refunded_at")));
+        out.put("refundCent", order == null ? null : order.get("refund_cent"));
         out.put("plan", account.planState(user));
-        out.put("expiresAt", JsonUtil.iso(user.get("plan_expires_at")));
+        out.put("expiresAt", JsonUtil.iso(user == null ? null : user.get("plan_expires_at")));
         return out;
     }
 
@@ -101,7 +141,8 @@ public class PayController {
             // 金额对不上是要人来看的，回 failure 让它重发、日志里留着；其余情况回 success 别再吵
             return text(verdict.mismatch() ? "failure" : "success");
         }
-        boolean changed = account.fulfill(params.get("out_trade_no"), params.get("trade_no"));
+        boolean changed = account.deliverPaid(
+            params.get("out_trade_no"), params.get("trade_no"), params.get("buyer_id"));
         log.info("[pay] {} {}", params.get("out_trade_no"), changed ? "发货完成" : "重复通知，已忽略");
         return text("success");
     }

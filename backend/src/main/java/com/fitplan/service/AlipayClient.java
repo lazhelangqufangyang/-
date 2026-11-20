@@ -96,6 +96,43 @@ public class AlipayClient {
         return exec("alipay.user.info.share", extra);
     }
 
+    /** 主动查单：通知丢失时，用支付宝那边的事实来兜底发货。 */
+    public JsonNode tradeQuery(String outTradeNo) {
+        LinkedHashMap<String, String> biz = new LinkedHashMap<>();
+        biz.put("out_trade_no", outTradeNo);
+        return exec("alipay.trade.query", bizContent(biz));
+    }
+
+    /** 全额退款；out_request_no 由调用方给，支付宝按它幂等。 */
+    public JsonNode tradeRefund(String outTradeNo, int amountCent, String reason, String outRequestNo) {
+        LinkedHashMap<String, String> biz = new LinkedHashMap<>();
+        biz.put("out_trade_no", outTradeNo);
+        biz.put("refund_amount", PayService.fromCent(amountCent));
+        biz.put("out_request_no", outRequestNo);
+        if (reason != null && !reason.isBlank()) {
+            biz.put("refund_reason", reason.length() > 256 ? reason.substring(0, 256) : reason);
+        }
+        return exec("alipay.trade.refund", bizContent(biz));
+    }
+
+    /** 退款结果查询：退款调用超时或结果未知时，用它确认真实状态。 */
+    public JsonNode refundQuery(String outTradeNo, String outRequestNo) {
+        LinkedHashMap<String, String> biz = new LinkedHashMap<>();
+        biz.put("out_trade_no", outTradeNo);
+        biz.put("out_request_no", outRequestNo);
+        return exec("alipay.trade.fastpay.refund.query", bizContent(biz));
+    }
+
+    private static LinkedHashMap<String, String> bizContent(Map<String, String> biz) {
+        LinkedHashMap<String, String> extra = new LinkedHashMap<>();
+        try {
+            extra.put("biz_content", JsonUtil.MAPPER.writeValueAsString(biz));
+        } catch (Exception e) {
+            throw new IllegalStateException("支付宝 biz_content 序列化失败：" + e.getMessage(), e);
+        }
+        return extra;
+    }
+
     /** 签名串：按键名排序拼 k=v，值不做 URL 编码（支付宝网关 RSA2 的口径）。 */
     public static String canonical(Map<String, String> params) {
         TreeMap<String, String> sorted = new TreeMap<>();

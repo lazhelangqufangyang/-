@@ -17,6 +17,7 @@ public class FitplanProperties {
     private boolean healthDetail = false;
     private final Alipay alipay = new Alipay();
     private final Pay pay = new Pay();
+    private final Admin admin = new Admin();
 
     public boolean isHealthDetail() {
         return healthDetail;
@@ -72,6 +73,10 @@ public class FitplanProperties {
 
     public Pay getPay() {
         return pay;
+    }
+
+    public Admin getAdmin() {
+        return admin;
     }
 
     public String trimmedFront() {
@@ -204,6 +209,47 @@ public class FitplanProperties {
 
         public void setSubject(String subject) {
             this.subject = subject;
+        }
+    }
+
+    /** 管理端默认关闭：登录名或口令为空、口令短于 12 位，/api/admin/** 一律回 404 */
+    public static class Admin {
+
+        private String login = "";
+        private String password = "";
+        private int sessionHours = 12;
+        private String ips = "";
+
+        public String getLogin() {
+            return login;
+        }
+
+        public void setLogin(String login) {
+            this.login = login;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public int getSessionHours() {
+            return sessionHours;
+        }
+
+        public void setSessionHours(int sessionHours) {
+            this.sessionHours = sessionHours;
+        }
+
+        public String getIps() {
+            return ips;
+        }
+
+        public void setIps(String ips) {
+            this.ips = ips;
         }
     }
 }

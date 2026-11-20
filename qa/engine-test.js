@@ -11,7 +11,7 @@ import { wishToGoal, weekdayName } from '../src/engine/goals.js';
 import { buildFramework } from '../src/engine/week.js';
 import { addPlannedSet, buildSheet, cutPlannedSet, currentWeek, capacityOf, dropStepPlan, hasDropSet, moveSlot, previewSlot, swapSlotExercise, toggleDropSet, wantAreasOf } from '../src/engine/day.js';
 import { addDaysIso, weekdayOf, elapsedMark, todayIso } from '../src/engine/time.js';
-import { measureByDay, measureStats, measureTargetBand, measureVerdict, sparkLine } from '../src/engine/measure.js';
+import { bodyTrend } from '../src/engine/trends.js';
 import { BROWSE_AREAS, browseAreasOf, byId, fitsEquipment } from '../src/engine/exercises.js';
 import { loadLabel, roundLoad, suggestWeight } from '../src/engine/load.js';
 import { baselineAdvice } from '../src/engine/lifestyle.js';
@@ -1495,7 +1495,7 @@ head('AX 新手第一张表：不问星期就周一到周四、四练三分化�
     line('  判据不符的项：' + (miss.length ? '\n    · ' + miss.join('\n    · ') : '没有'));
 }
 
-head('AW 身体数据打卡：同一天只认最后一次，判断只看 7 天平均');
+head('AW 身体数据打卡：区间内的体重/腰围点，最新一次单独给');
 {
     const miss = [];
     const want = (label, got, exp) => {
@@ -1504,58 +1504,41 @@ head('AW 身体数据打卡：同一天只认最后一次，判断只看 7 天�
         line(`  ${got === exp ? '✔' : '✘'} ${label} = ${got}（期望 ${exp}）`);
     };
     const today = todayIso();
+    const from = addDaysIso(today, -13);
     let n = 0;
-    const mk = (back, weightKg, waistCm = null, tsBack = 0) => ({
+    const mk = (back, weightKg, waistCm = null) => ({
         id: `mea${(n += 1)}`,
         date: addDaysIso(today, -back),
         weightKg,
         waistCm,
         note: '',
-        ts: new Date(Date.now() - tsBack * 86400000).toISOString()
+        ts: ''
     });
-    const lean = { kindKey: 'lean' };
-    const bulk = { kindKey: 'bulk' };
-    const strength = { kindKey: 'strength' };
+    const empty = bodyTrend([], from, today);
+    want('一条都没有时 latest 是 null', String(empty.latest), 'null');
+    want('一条都没有时不炸', String(empty.changeKg), 'null');
+    want('一条都没有时点为空', String(empty.points.length), '0');
+
     const downSlow = [mk(12, 78.8), mk(9, 78.8), mk(5, 78.2), mk(2, 78.2)];
-    const downFast = [mk(12, 78.8), mk(9, 78.8), mk(5, 77.9), mk(2, 77.9)];
-    const downTiny = [mk(12, 78.8), mk(9, 78.8), mk(5, 78.6), mk(2, 78.6)];
-    const flat = [mk(12, 78.8), mk(9, 78.8), mk(5, 78.8), mk(2, 78.8)];
-    const upFast = [mk(12, 78), mk(9, 78), mk(5, 78.7), mk(2, 78.7)];
-    const upSlow = [mk(12, 78), mk(9, 78), mk(5, 78.2), mk(2, 78.2)];
-    const steady = [mk(12, 78), mk(9, 78), mk(5, 78.1), mk(2, 78.1)];
-    const lost = [mk(12, 78), mk(9, 78), mk(5, 77.4), mk(2, 77.4)];
-    want('同一天两次只留最后那次', String(measureByDay([mk(3, 80, null, 2), mk(3, 78.5, null, 1)]).length), '1');
-    want('留的是后写的那条', String(measureByDay([mk(3, 80, null, 2), mk(3, 78.5, null, 1)])[0].weightKg), '78.5');
-    want('未来的打卡不进统计', String(measureStats([mk(-1, 79), mk(2, 78.4)], today).count), '1');
-    want('一条都没有时不炸', String(measureStats([], today).weeklyKg), 'null');
-    want('没打卡时先教怎么称', measureVerdict(measureStats([], today), lean).tone, 'info');
-    want('只有一次体重说有数就好', String(measureVerdict(measureStats([mk(2, 78.2)], today), lean).text.includes('只有一次体重记录')), 'true');
-    want('四个点走两周平均', measureStats(downSlow, today).basis, '两个 7 天平均');
-    want('本周平均 78.2', String(measureStats(downSlow, today).avg7.avg), '78.2');
-    want('降 0.76% 算正常节奏', measureVerdict(measureStats(downSlow, today), lean).tone, 'ok');
-    want('降 1.1% 就该往回加热量', measureVerdict(measureStats(downFast, today), lean).tone, 'warn');
-    want('只降 0.25% 说不急', String(measureVerdict(measureStats(downTiny, today), lean).text.includes('比 0.5% 慢一档')), 'true');
-    want('平均没降就去看腰围', String(measureVerdict(measureStats(flat, today), lean).text.includes('腰围和衣服更准')), 'true');
-    want('增重涨 0.9% 是吃多了', measureVerdict(measureStats(upFast, today), bulk).tone, 'warn');
-    want('增重涨 0.26% 正好', measureVerdict(measureStats(upSlow, today), bulk).tone, 'ok');
-    want('力量目标体重不动就算达标', measureVerdict(measureStats(steady, today), strength).tone, 'ok');
-    want('力量目标掉了体重要补热量', String(measureVerdict(measureStats(lost, today), strength).text.includes('把热量补回去')), 'true');
-    want('点不够两周就退回首尾', String(measureStats([mk(20, 80), mk(0, 76)], today).basis.startsWith('首尾两点')), 'true');
-    want('首尾两点不下节奏结论', String(measureVerdict(measureStats([mk(20, 80), mk(0, 76)], today), lean).text.includes('凑够两个 7 天平均')), 'true');
+    const trend = bodyTrend(downSlow, from, today);
+    want('区间内的点都保留', String(trend.points.length), '4');
+    want('点按日期从早到晚', trend.points.map((p) => p.date).join(','), [...downSlow].map((m) => m.date).sort().join(','));
+    want('最新一次是最后一条体重', String(trend.latest.weightKg), '78.2');
+    want('区间变化按首尾差算', String(trend.changeKg), '-0.6');
+
     const waistOnly = [mk(12, null, 90), mk(2, null, 88)];
-    want('只记腰围也能算差值', String(measureStats(waistOnly, today).waistDelta), '-2');
-    want('只记腰围时提醒补体重', String(measureVerdict(measureStats(waistOnly, today), lean).text.includes('体重再记一次')), 'true');
-    const band = measureTargetBand(measureStats(downSlow, today), lean);
-    want('减脂目标的 4 周落点在下方', String(band[1] < 78.2), 'true');
-    want('不靠体重差的目标不给落点', String(measureTargetBand(measureStats(steady, today), { kindKey: 'health' })), 'null');
-    const sp = sparkLine(downSlow, 'weightKg', today);
-    want('折线有数就出线', String(sp.empty), 'false');
-    want('折线点数等于有体重的天数', String(sp.points.length), '4');
-    want('腰围没记就是空线', String(sparkLine(downSlow, 'waistCm', today).empty), 'true');
-    want('横轴从第一个点起算', String(sp.points[0].x), '0');
-    want('最后一个点是最近那次称的日子', sp.points.at(-1).date, addDaysIso(today, -2));
-    want('今天称过就贴住右边', String(sparkLine(downSlow.concat([mk(0, 78.1)]), 'weightKg', today).points.at(-1).x), '100');
-    want('超过 84 天的老打卡不进折线', String(sparkLine([mk(200, 82), mk(5, 80), mk(0, 78.2)], 'weightKg', today).count), '2');
+    const waist = bodyTrend(waistOnly, from, today);
+    want('只记腰围也算点', String(waist.points.length), '2');
+    want('只记腰围时没有体重变化', String(waist.changeKg), 'null');
+    want('只记腰围时 latest 是 null', String(waist.latest), 'null');
+
+    const outside = bodyTrend([mk(40, 80), mk(2, 78.2)], from, today);
+    want('区间外的老打卡不进点', String(outside.points.length), '1');
+    want('区间内只有一次时不给变化', String(outside.changeKg), 'null');
+
+    const future = bodyTrend([mk(-1, 79), mk(2, 78.4)], from, today);
+    want('未来的打卡不进区间点', String(future.points.length), '1');
+
     const noNote = parseImported(JSON.stringify({
         profile: emptyProfile(),
         measureLogs: [{ id: 'nn', date: today, weightKg: 78.1, waistCm: null, ts: '' }]
@@ -1566,9 +1549,6 @@ head('AW 身体数据打卡：同一天只认最后一次，判断只看 7 天�
         measureLogs: [mk(2, 0, 88), mk(5, 78, null)]
     }));
     want('体重填 0 的打卡被丢掉', String(bad.measureLogs.length), '1');
-    const realGoal = wishToGoal({ ...base, weightKg: 78 });
-    want('真实目标也带方向（穿衣有型往下走）', String(realGoal.kindKey), 'shape');
-    want('方向能取到周速率', String(measureVerdict(measureStats(downSlow, today), realGoal).tone), 'ok');
     line('  判据不符的项：' + (miss.length ? '\n    · ' + miss.join('\n    · ') : '没有'));
 }
 

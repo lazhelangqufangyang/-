@@ -4599,3 +4599,205 @@ body::after {
 .lb-tag.feel-3 { background: #f4f5f9; color: #555; }
 .lb-tag.feel-4 { background: #e8f1ff; color: #1d4ed8; }
 .lb-tag.feel-5 { background: #e6f7ed; color: #15803d; }
+
+/* ========= 桌面登录页 ========= */
+.login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--bg);
+}
+.login-visual { display: none; }
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+.login-card { width: 100%; max-width: 430px; }
+.login-mobile-brand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.login-mobile-brand span {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+.login-mobile-brand b { font-size: 34px; line-height: 1; }
+.login-head h2 { margin: 0; font-size: 30px; letter-spacing: -0.6px; }
+.login-head p { margin: 6px 0 16px; color: var(--text-faint); font-size: 12.5px; line-height: 1.6; }
+
+/* ========= 桌面外壳：≥1024px 用左侧导航，手机仍是底部 Tab ========= */
+.desktop-side { display: none; }
+
+@media (min-width: 1024px) {
+  .login-page { grid-template-columns: minmax(0, 1.05fr) minmax(440px, 0.95fr); }
+  .login-visual {
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    background: #0d1117;
+  }
+  .login-visual-bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('/images/pr/chest.jpg');
+    background-size: cover;
+    background-position: center;
+    filter: saturate(0.85) brightness(0.5);
+    transform: scale(1.02);
+  }
+  .login-visual::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(8, 10, 14, 0.15) 0%, rgba(8, 10, 14, 0.55) 55%, rgba(8, 10, 14, 0.94) 100%);
+  }
+  .login-visual-copy {
+    position: relative;
+    z-index: 1;
+    align-self: flex-end;
+    padding: 56px;
+    color: #fff;
+    max-width: 640px;
+  }
+  .login-kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 700;
+  }
+  .login-visual-copy h1 {
+    margin: 14px 0 12px;
+    font-size: clamp(30px, 3vw, 46px);
+    line-height: 1.16;
+    letter-spacing: -0.8px;
+  }
+  .login-visual-copy p {
+    margin: 0;
+    max-width: 46ch;
+    color: rgba(255, 255, 255, 0.66);
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+  .login-panel { padding: 56px; }
+  .login-card { max-width: 420px; }
+  .login-mobile-brand { display: none; }
+  .login-head h2 { font-size: 32px; }
+
+  .app.app-shell {
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    max-width: 1440px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+  .app-shell .desktop-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100dvh;
+    padding: 26px 16px 18px;
+    border-right: 1px solid var(--line);
+  }
+  .app-shell .topbar {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 1080px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 26px 32px 4px;
+  }
+  .app-shell main.screen {
+    grid-column: 2;
+    grid-row: 2;
+    max-width: 1080px;
+    padding: 6px 32px 42px;
+  }
+  .app-shell .tabbar { display: none; }
+
+  .side-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 10px 14px;
+  }
+  .side-brand span {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    color: var(--text-faint);
+  }
+  .side-brand b { font-size: 30px; line-height: 1; letter-spacing: -1px; }
+  .side-nav { display: flex; flex-direction: column; gap: 4px; }
+  .side-nav button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .side-nav button .ico { width: 20px; height: 20px; flex: none; }
+  .side-nav button:hover { background: var(--bg-sunken); color: var(--text-dim); }
+  .side-nav button[aria-current='page'] { background: var(--accent-soft); color: var(--accent); }
+  .side-account {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--bg-card);
+  }
+  .side-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line-strong);
+    flex: none;
+  }
+  .side-dot.on { background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16); }
+  .side-account-text { min-width: 0; flex: 1; }
+  .side-account-text b { display: block; font-size: 12px; }
+  .side-account-text small {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-faint);
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .side-account > button {
+    flex: none;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    color: var(--text-dim);
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .side-foot { margin: 2px 4px 0; font-size: 10px; color: var(--text-faint); }
+}
