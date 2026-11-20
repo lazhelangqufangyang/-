@@ -16,6 +16,7 @@ import RecordPage from './pages/RecordPage.jsx';
 import DietPage from './pages/DietPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import ProfilePage from './pages/ProfilePage';
+import BadgePage from './pages/BadgePage.jsx';
 import MovesPage from './pages/MovesPage';
 import PickPage from './pages/PickPage.jsx';
 import PlanPage from './pages/PlanPage.jsx';
@@ -70,7 +71,7 @@ function TabIco({ name }) {
     </svg>);
 }
 /** 可以路由到的第一级；session、pick、plan 和 setup 不在底部导航里 */
-const ROUTES = ['train', 'moves', 'log', 'diet', 'settings', 'session', 'pick', 'plan'];
+const ROUTES = ['train', 'moves', 'log', 'diet', 'settings', 'session', 'pick', 'plan', 'badges'];
 /** 设置里的模块，每个都是一个子页面 */
 const SETTINGS_MODULES = ['profile', 'account', 'data', 'safety'];
 const TITLES = {
@@ -495,6 +496,10 @@ function AppInner() {
                 go('#/settings');
             }}/>);
     }
+    // 「我的徽章」：从个人页右上角的徽章按钮进来，整屏，不套底部 Tab
+    if (route === 'badges') {
+        return <BadgePage logs={state.setLogs} onBack={() => go('#/settings')}/>;
+    }
     const tab = route.split('/')[0];
     const isTrain = tab === 'train';
     const isBarePage = route === 'log' || route === 'settings' || route === 'moves';
@@ -520,7 +525,7 @@ function AppInner() {
             {tab === 'log' ? (<RecordPage sheets={state.sheets} logs={state.setLogs} activities={state.activityLogs} recPick={recPick} onStartPick={startRecPick} onToggleRecPick={toggleRecPick} onPickDone={endRecPick} onDismissPick={clearRecPick} onAdd={addActivityFromLog} onRemove={removeActivity} onRemoveExercise={removeExercise} onGoToday={() => go('#/train')}/>) : null}
             {tab === 'diet' ? (<DietPage profile={state.profile} meals={state.mealLogs} onAdd={addMeal} onRemove={removeMeal} onGoToday={() => go('#/train')} onGoProfile={() => go('#/settings/profile')}/>) : null}
             {tab === 'settings' ? (route === 'settings'
-                ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)} logs={state.setLogs}/>
+                ? <ProfilePage key={isLoggedIn ? 'auth' : 'guest'} isLoggedIn={isLoggedIn} onLogin={mockLogin} onLogout={handleLogout} onOpenModule={(module) => go(`#/settings/${module}`)} onOpenBadges={() => go('#/badges')} logs={state.setLogs}/>
                 : (<SettingsPage state={state} sub={route.split('/')[1]} onGo={go} onSave={saveSettings} onImport={importState}/>)) : null}
           </main>
           <nav className="tabbar">

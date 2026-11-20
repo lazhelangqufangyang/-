@@ -10,6 +10,7 @@ import {
   Lock,
   LogIn,
   LogOut,
+  Medal,
   Pencil,
   RefreshCw,
   Settings,
@@ -47,6 +48,7 @@ type ProfilePageProps = {
   onLogout?: () => void;
   onSaveProfile?: (profile: UserProfile) => void;
   onOpenModule?: (module: SettingsModule) => void;
+  onOpenBadges?: () => void;
   logs?: { exId?: string; weightKg?: number | null; date?: string }[];
 };
 
@@ -222,6 +224,7 @@ export default function ProfilePage({
   onLogout,
   onSaveProfile,
   onOpenModule,
+  onOpenBadges,
   logs = [],
 }: ProfilePageProps) {
   const [initialCache] = useState(() =>
@@ -619,6 +622,14 @@ export default function ProfilePage({
               <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${loading ? 'bg-gray-100 text-gray-400' : loggedIn ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
                 {loading ? '同步中' : loggedIn ? '已登录' : '未登录'}
               </span>
+              <button
+                type="button"
+                onClick={onOpenBadges}
+                aria-label="我的徽章"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition-all hover:text-[#E63946] active:scale-95"
+              >
+                <Medal size={17} strokeWidth={1.9} />
+              </button>
               <button
                 type="button"
                 onClick={openSettings}

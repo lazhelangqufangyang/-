@@ -90,9 +90,8 @@
 .logbook-page.seasoned .rec-cal {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.1);
-  -webkit-backdrop-filter: blur(1.5px) saturate(1.08);
-  backdrop-filter: blur(1.5px) saturate(1.08);
+  /* 只留一层极淡的白色，不用 backdrop-filter：窗外的画面保持原样清晰 */
+  background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.22);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22), inset 0 0 60px rgba(4, 8, 14, 0.2);
 }

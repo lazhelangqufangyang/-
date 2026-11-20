@@ -67,7 +67,7 @@ export function dietTargets(p) {
 export function buildDays(meals) {
     const dates = [...new Set(meals.map((m) => m.date))].sort().reverse();
     return dates.map((date) => {
-        const list = meals.filter((m) => m.date === date).sort((a, b) => a.ts.localeCompare(b.ts));
+        const list = meals.filter((m) => m.date === date).sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
         // 0 当成「没估」：记了一句话「没吃」不该被算成一个有数字的样本
         const counted = list.filter((m) => (m.kcal ?? 0) > 0);
         const sum = (pick) => Math.round(list.reduce((x, m) => x + (pick(m) ?? 0), 0));
