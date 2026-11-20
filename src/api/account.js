@@ -86,6 +86,14 @@ export function createProOrder() {
 export function orderStatus(outTradeNo) {
     return requestJson(`/pay/order?out_trade_no=${encodeURIComponent(outTradeNo)}`);
 }
+/** 通知没到时的兜底查单：让后端主动问支付宝一次，每单 10 秒只允许一次 */
+export function refreshOrder(outTradeNo) {
+    return requestJson('/pay/order/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ outTradeNo })
+    });
+}
 export function readSession() {
     return requestJson('/session');
 }

@@ -214,7 +214,8 @@ public class AccountService {
             return null;
         }
         List<Map<String, Object>> rows = jdbc.queryForList(
-            "SELECT out_trade_no, user_id, plan, days, amount_cent, status, trade_no, created_at, paid_at"
+            "SELECT out_trade_no, user_id, plan, days, amount_cent, status, trade_no, buyer_id,"
+                + " refund_status, refund_cent, refunded_at, refund_request_no, created_at, paid_at"
                 + " FROM orders WHERE out_trade_no = ? LIMIT 1",
             outTradeNo);
         return rows.isEmpty() ? null : rows.get(0);
@@ -222,14 +223,15 @@ public class AccountService {
 
     /**
      * 发货：先把订单从 created 推到 paid，这条 UPDATE 只有一次机会（更新行数说了算），
-     * 抢到了才加天数 —— 支付宝会把同一份通知重发很多次，幂等靠的就是这道闸。
+     * 抢到了才加天数 —— 通知会重发、查单也会重复调，幂等靠的就是这道闸。
+     * 通知和主动查单共用这一个入口，两条路径的行为不允许分叉。
      */
     @Transactional
-    public boolean fulfill(String outTradeNo, String tradeNo) {
+    public boolean deliverPaid(String outTradeNo, String tradeNo, String buyerId) {
         int hit = jdbc.update(
-            "UPDATE orders SET status = 'paid', paid_at = NOW(), trade_no = ?"
+            "UPDATE orders SET status = 'paid', paid_at = NOW(), trade_no = ?, buyer_id = IFNULL(?, buyer_id)"
                 + " WHERE out_trade_no = ? AND status = 'created'",
-            tradeNo, outTradeNo);
+            tradeNo, buyerId, outTradeNo);
         if (hit == 0) {
             return false;
         }
@@ -243,6 +245,41 @@ public class AccountService {
                 + " plan_expires_at = DATE_ADD(GREATEST(COALESCE(plan_expires_at, NOW()), NOW()), INTERVAL ? DAY)"
                 + " WHERE id = ?",
             days, userId);
+        return true;
+    }
+
+    /** 权益快照：管理端补发/退款前后的 before/after 都读这一份。 */
+    public Map<String, Object> userPlanRow(long userId) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "SELECT id, login_name, alipay_uid, plan, plan_expires_at FROM users WHERE id = ? LIMIT 1",
+            userId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** 管理端手工补发：没有订单可查时的线下补偿路径，必须配审计 */
+    @Transactional
+    public boolean grantPlan(long userId, int days) {
+        return jdbc.update(
+            "UPDATE users SET plan = 'pro',"
+                + " plan_expires_at = DATE_ADD(GREATEST(COALESCE(plan_expires_at, NOW()), NOW()), INTERVAL ? DAY)"
+                + " WHERE id = ?",
+            days, userId) > 0;
+    }
+
+    /** 管理端手工撤销：从到期日往前扣，扣到当天就降免费 */
+    @Transactional
+    public boolean revokePlan(long userId, int days) {
+        int hit = jdbc.update(
+            "UPDATE users SET plan_expires_at = DATE_SUB(plan_expires_at, INTERVAL ? DAY)"
+                + " WHERE id = ? AND plan_expires_at IS NOT NULL",
+            days, userId);
+        if (hit == 0) {
+            return false;
+        }
+        jdbc.update(
+            "UPDATE users SET plan = 'free', plan_expires_at = NULL"
+                + " WHERE id = ? AND (plan_expires_at IS NULL OR plan_expires_at <= NOW())",
+            userId);
         return true;
     }
 

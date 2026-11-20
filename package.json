@@ -12,6 +12,7 @@
     "tunnel": "D:/Tools/cloudflared.exe tunnel --no-autoupdate --url http://127.0.0.1:8787"
   },
   "dependencies": {
+    "@mediapipe/pose": "^0.5.1675469404",
     "@tailwindcss/vite": "^4.3.5",
     "framer-motion": "^14.14.0",
     "lucide-react": "^1.74.0",

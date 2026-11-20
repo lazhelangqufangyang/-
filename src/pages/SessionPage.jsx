@@ -5,6 +5,7 @@ import { dropStepPlan, hasDropSet } from '../engine/day.js';
 import { injuryAreas, loadInputName, loadLabel } from '../engine/load.js';
 import { swapAdvice } from '../ai.js';
 import EffortSlider from '../components/EffortSlider.jsx';
+import PostureCheck from '../components/PostureCheck.jsx';
 import { MatchaPowderReveal } from '../components/MatchaPowderReveal';
 import './session.css';
 import './matcha-reward.css';
@@ -58,6 +59,7 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
     const [aiReasons, setAiReasons] = useState({});
     const [aiBusy, setAiBusy] = useState(false);
     const [aiNote, setAiNote] = useState('');
+    const [checkOpen, setCheckOpen] = useState(null);
     const [showReward, setShowReward] = useState(false);
     const [showBadge, setShowBadge] = useState(false);
     /** 翻面卡片的背面高度：量出来再给外层，整张卡才能像纸一样翻过去 */
@@ -241,6 +243,13 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
                     {isLift && doneCount ? <em className="sess-card-done">已做 {doneCount}/{slot.setPlan.length} 组</em> : null}
                   </p>
                 </div>
+                {isLift && slot.exId ? (<button type="button" className="sess-check" onClick={() => {
+                        const ex = byId(slot.exId);
+                        if (ex)
+                            setCheckOpen(ex);
+                    }}>
+                    动作检查
+                  </button>) : null}
                 <button type="button" className="sess-remove" onClick={() => onSkip(slot.id)} aria-label="今天不练这个动作">×</button>
               </div>
 
@@ -461,5 +470,7 @@ export default function SessionPage({ sheet, profile, settings, logs, onSwap, on
           <p>向左滑动撕开包装获取奖励...</p>
         </div>)}
       </div>)}
+
+      {checkOpen ? <PostureCheck exercise={checkOpen} heightCm={profile?.heightCm} goal={profile?.goal} onClose={() => setCheckOpen(null)}/> : null}
     </div>);
 }

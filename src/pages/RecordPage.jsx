@@ -318,7 +318,7 @@ function AddRecordPage({ date, recPicks, onGoPick, onTogglePick, onAdd, onDone }
     </div>);
 }
 
-export default function RecordPage({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onDismissPick, onAdd, onRemove, onRemoveExercise, onGoToday }) {
+export default function RecordPage({ sheets, logs, activities, recPick, onStartPick, onToggleRecPick, onPickDone, onDismissPick, onAdd, onRemove, onRemoveExercise, onGoToday, onOpenTrends }) {
     const today = todayIso();
     const realEntries = useMemo(() => buildEntries(sheets, logs, activities), [sheets, logs, activities]);
     const [demoActions, setDemoActions] = useState(MOCK_ACTIONS);
@@ -461,6 +461,15 @@ export default function RecordPage({ sheets, logs, activities, recPick, onStartP
         </div>
       </section>
       </div>
+
+      <button type="button" className="rec-trends-entry" onClick={onOpenTrends}>
+        <span className="rec-trends-badge" aria-hidden="true">↗</span>
+        <span className="rec-trends-text">
+          <b>趋势与周报</b>
+          <small>容量、力量、体重、饮食，按周看趋势</small>
+        </span>
+        <span className="rec-trends-arrow" aria-hidden="true">›</span>
+      </button>
 
       <section className="rec-detail">
         <div className="rec-detail-head">

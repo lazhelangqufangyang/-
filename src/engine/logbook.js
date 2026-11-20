@@ -113,6 +113,72 @@ function topLog(logs) {
         return null;
     return logs.reduce((a, b) => (b.reps > a.reps ? b : a));
 }
+/** 个人页五栏的口径：臀并进腿，核心和有氧不进榜 */
+const PR_PART_KEY = { 胸: 'chest', 背: 'back', 肩: 'shoulders', 手臂: 'arms', 腿: 'legs', 臀: 'legs' };
+/**
+ * 按部位汇总每个动作的个人最好成绩：最重的一组（重量 × 次数）和单组最高次数。
+ * 只用执行表上记的组，递增热身不算；递减组取记录里的首档重量（SessionPage 写入时已经是最大档）。
+ */
+export function partBests(logs) {
+    const out = { chest: [], back: [], shoulders: [], arms: [], legs: [] };
+    const rows = new Map();
+    for (const l of logs) {
+        if (!l || typeof l.exId !== 'string' || l.slotId === 'ramp')
+            continue;
+        const reps = l.reps;
+        if (typeof reps !== 'number' || !(reps > 0))
+            continue;
+        const ex = byId(l.exId);
+        if (!ex)
+            continue;
+        const key = PR_PART_KEY[partOf(ex)];
+        if (!key)
+            continue;
+        const weight = typeof l.weightKg === 'number' && l.weightKg > 0 ? l.weightKg : null;
+        const row = rows.get(l.exId) ?? {
+            exId: l.exId,
+            name: ex.name,
+            unit: ex.unit ?? 'kg',
+            weight: null,
+            reps: 0,
+            date: '',
+            maxReps: 0,
+            maxRepsDate: '',
+            sets: 0
+        };
+        row.sets += 1;
+        if (weight !== null && (row.weight === null || weight > row.weight || (weight === row.weight && reps > row.reps))) {
+            row.weight = weight;
+            row.reps = reps;
+            row.date = l.date ?? '';
+        }
+        if (reps > row.maxReps) {
+            row.maxReps = reps;
+            row.maxRepsDate = l.date ?? '';
+        }
+        rows.set(l.exId, row);
+    }
+    for (const row of rows.values()) {
+        const key = PR_PART_KEY[partOf(byId(row.exId))];
+        if (key)
+            out[key].push(row);
+    }
+    for (const key of Object.keys(out)) {
+        out[key].sort((a, b) => {
+            if (a.weight !== null && b.weight !== null) {
+                if (b.weight !== a.weight)
+                    return b.weight - a.weight;
+                return b.reps - a.reps;
+            }
+            if (a.weight !== null)
+                return -1;
+            if (b.weight !== null)
+                return 1;
+            return b.maxReps - a.maxReps;
+        });
+    }
+    return out;
+}
 /** 这一天这个动作的最高重量（或次数）是不是本机到目前为止最好的 */
 function isNewBest(logs, exId, date) {
     const mine = logs.filter((l) => l.exId === exId);

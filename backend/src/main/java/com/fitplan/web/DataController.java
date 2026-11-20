@@ -33,6 +33,16 @@ public class DataController {
     }
 
     /**
+     * 云端同步是 Pro 权益：上传和拉回都要求有效期内的 Pro。
+     * 删除不设门槛 —— 用户随时可以清掉云端那份，不因为订阅过期就删不了。
+     */
+    private void requirePro(Map<String, Object> user) {
+        if (!"pro".equals(account.planState(user))) {
+            throw new ApiException(402, "云端同步是 Pro 权益：升级后再传或拉回；删除云端那份始终可用。");
+        }
+    }
+
+    /**
      * 整份覆盖。带上 `stamp`（上一次从云端读到的 syncedAt）就先对一遍时间：
      * 云端那份在这之后又被别处传过一次，就在这里拦下 409，让用户自己决定是拉下来看看还是硬覆盖。
      * 不带 stamp 或带 force=1 就当没这回事，照旧覆盖 —— 老客户端不会因此用不了。
@@ -43,6 +53,7 @@ public class DataController {
                                     @RequestParam(name = "force", required = false) String force,
                                     @RequestBody(required = false) String body) {
         Map<String, Object> user = account.requireUser(TokenSupport.bearer(request), "先登录再往云端传");
+        requirePro(user);
         if (body == null || body.trim().isEmpty()) {
             throw new ApiException(400, "请求体是空的，没有记录可存");
         }
@@ -83,6 +94,7 @@ public class DataController {
     @GetMapping("/api/data")
     public Map<String, Object> read(HttpServletRequest request) {
         Map<String, Object> user = account.requireUser(TokenSupport.bearer(request), "没有有效会话");
+        requirePro(user);
         Map<String, Object> data = records.readRecords(AccountService.userIdOf(user));
         if (data == null) {
             throw new ApiException(404, "云端还没有这个账号的记录。在另一台设备上点过一次「传到云端」才会有。");

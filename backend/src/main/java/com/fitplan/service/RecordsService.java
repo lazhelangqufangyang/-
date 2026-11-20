@@ -63,7 +63,9 @@ public class RecordsService {
 
     private static final String[] MEAL_COLUMNS = {
         "log_id", "day_date", "slot", "name", "kcal",
-        "protein_g", "carbs_g", "fat_g", "sugar_g", "sodium_mg", "note", "logged_ts"
+        "protein_g", "carbs_g", "fat_g", "sugar_g", "sodium_mg",
+        "fiber_g", "calcium_mg", "iron_mg", "potassium_mg", "vitamin_d_mcg", "vitamin_b12_mcg", "magnesium_mg",
+        "note", "logged_ts"
     };
 
     private static final String[] MEASURE_COLUMNS = {"log_id", "day_date", "weight_kg", "waist_cm", "note", "logged_ts"};
@@ -327,6 +329,13 @@ public class RecordsService {
             num(at(m, "fatG"), "脂肪", 999999, 0, false, false),
             num(at(m, "sugarG"), "糖", 999999, 0, false, false),
             num(at(m, "sodiumMg"), "钠", 4294967295L, 0, false, false),
+            num(at(m, "fiberG"), "膳食纤维", 999999, 0, false, false),
+            num(at(m, "calciumMg"), "钙", 999999, 0, false, false),
+            num(at(m, "ironMg"), "铁", 999999, 0, false, false),
+            num(at(m, "potassiumMg"), "钾", 999999, 0, false, false),
+            num(at(m, "vitaminDMcg"), "维生素 D", 999999, 0, false, false),
+            num(at(m, "vitaminB12Mcg"), "维生素 B12", 999999, 0, false, false),
+            num(at(m, "magnesiumMg"), "镁", 999999, 0, false, false),
             text(at(m, "note"), "备注", 1000, false),
             tsStr(at(m, "ts"), "记下这条的时间")
         };
@@ -453,6 +462,13 @@ public class RecordsService {
         out.put("fatG", n(r.get("fat_g")));
         out.put("sugarG", n(r.get("sugar_g")));
         out.put("sodiumMg", n(r.get("sodium_mg")));
+        out.put("fiberG", n(r.get("fiber_g")));
+        out.put("calciumMg", n(r.get("calcium_mg")));
+        out.put("ironMg", n(r.get("iron_mg")));
+        out.put("potassiumMg", n(r.get("potassium_mg")));
+        out.put("vitaminDMcg", n(r.get("vitamin_d_mcg")));
+        out.put("vitaminB12Mcg", n(r.get("vitamin_b12_mcg")));
+        out.put("magnesiumMg", n(r.get("magnesium_mg")));
         out.put("note", r.get("note") == null ? "" : r.get("note"));
         out.put("ts", r.get("logged_ts"));
         return out;

@@ -47,3 +47,11 @@ fitplan:
     price-yuan: ${FITPLAN_PRO_PRICE_YUAN:8}
     days: ${FITPLAN_PRO_DAYS:30}
     subject: ${FITPLAN_PRO_SUBJECT:练 · Pro 会员}
+  # 管理端：登录名/口令任一为空或口令短于 12 位就不启用，所有 /api/admin/** 回 404。
+  # 账号只在启动时创建一次，已存在不会覆盖口令；没有注册接口。
+  admin:
+    login: ${FITPLAN_ADMIN_LOGIN:}
+    password: ${FITPLAN_ADMIN_PASSWORD:}
+    session-hours: ${FITPLAN_ADMIN_SESSION_HOURS:12}
+    # 可选 IP 白名单，逗号分隔；留空不限制。直连部署取连接来源 IP，不信任 X-Forwarded-For。
+    ips: ${FITPLAN_ADMIN_IPS:}

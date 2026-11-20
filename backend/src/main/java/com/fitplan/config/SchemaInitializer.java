@@ -75,6 +75,8 @@ public class SchemaInitializer {
                 jdbc.execute(statement);
             }
             upgradeUsers();
+            upgradeOrders();
+            upgradeMealLogs();
             log.info("[fitplan-api] 建表就位（{}）", schema.toAbsolutePath());
         } catch (Exception e) {
             log.warn("[fitplan-api] 建表没跑完：{}", e.getMessage());
@@ -106,6 +108,46 @@ public class SchemaInitializer {
                 + " COMMENT '支付宝 user_id，只用来认人，页面只显示后四位；账号密码注册的账号这一列空着'");
         }
         log.info("[fitplan-api] users 表的账号密码列已就位");
+    }
+
+    /**
+     * 老库的 orders 表没有退款和 buyer 这几列。schema.sql 里的 CREATE TABLE IF NOT EXISTS
+     * 对已存在的表不生效，所以在这里逐列补；列名都是常量，不拼接外部输入。
+     */
+    private void upgradeOrders() {
+        if (columnType("orders", "out_trade_no") == null) {
+            return;
+        }
+        addColumn("orders", "buyer_id",
+            "VARCHAR(64) NULL COMMENT '支付宝 buyer_id，通知或查单回来记下，只做对认人' AFTER trade_no");
+        addColumn("orders", "refund_status",
+            "ENUM('none','refunded') NOT NULL DEFAULT 'none' AFTER buyer_id");
+        addColumn("orders", "refund_cent",
+            "INT UNSIGNED NULL COMMENT '实际退款金额（分）' AFTER refund_status");
+        addColumn("orders", "refunded_at", "DATETIME NULL AFTER refund_cent");
+        addColumn("orders", "refund_request_no",
+            "VARCHAR(64) NULL COMMENT '传给支付宝的 out_request_no' AFTER refunded_at");
+    }
+
+    private void addColumn(String table, String column, String definition) {
+        if (columnType(table, column) == null) {
+            jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            log.info("[fitplan-api] {} 表补列 {}", table, column);
+        }
+    }
+
+    /** 老库的饮食记录没有微量元素列：云端整份备份要能带上，所以在启动时逐列补 */
+    private void upgradeMealLogs() {
+        if (columnType("meal_logs", "log_id") == null) {
+            return;
+        }
+        addColumn("meal_logs", "fiber_g", "DECIMAL(7,1) NULL AFTER sodium_mg");
+        addColumn("meal_logs", "calcium_mg", "DECIMAL(8,1) NULL AFTER fiber_g");
+        addColumn("meal_logs", "iron_mg", "DECIMAL(6,1) NULL AFTER calcium_mg");
+        addColumn("meal_logs", "potassium_mg", "DECIMAL(8,1) NULL AFTER iron_mg");
+        addColumn("meal_logs", "vitamin_d_mcg", "DECIMAL(7,1) NULL AFTER potassium_mg");
+        addColumn("meal_logs", "vitamin_b12_mcg", "DECIMAL(7,1) NULL AFTER vitamin_d_mcg");
+        addColumn("meal_logs", "magnesium_mg", "DECIMAL(8,1) NULL AFTER vitamin_b12_mcg");
     }
 
     /** 返回该列的类型，列不存在返回 null */

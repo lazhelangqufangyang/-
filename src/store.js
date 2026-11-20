@@ -215,7 +215,14 @@ function isMealLog(v) {
         num(m.carbsG) &&
         num(m.fatG) &&
         num(m.sugarG) &&
-        num(m.sodiumMg));
+        num(m.sodiumMg) &&
+        num(m.fiberG) &&
+        num(m.calciumMg) &&
+        num(m.ironMg) &&
+        num(m.potassiumMg) &&
+        num(m.vitaminDMcg) &&
+        num(m.vitaminB12Mcg) &&
+        num(m.magnesiumMg));
 }
 /** 老存档只到蛋白质为止，碳水/脂肪/糖/钠一律补成 null，UI 才敢直接读 */
 function cleanMeal(m) {
@@ -227,7 +234,14 @@ function cleanMeal(m) {
         carbsG: num(m.carbsG),
         fatG: num(m.fatG),
         sugarG: num(m.sugarG),
-        sodiumMg: num(m.sodiumMg)
+        sodiumMg: num(m.sodiumMg),
+        fiberG: num(m.fiberG),
+        calciumMg: num(m.calciumMg),
+        ironMg: num(m.ironMg),
+        potassiumMg: num(m.potassiumMg),
+        vitaminDMcg: num(m.vitaminDMcg),
+        vitaminB12Mcg: num(m.vitaminB12Mcg),
+        magnesiumMg: num(m.magnesiumMg)
     };
 }
 /** 体重和腰围都可以只填一边；两边都空的那种条目没意义，丢掉 */

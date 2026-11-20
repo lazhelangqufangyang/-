@@ -25,7 +25,7 @@ public class PasswordAuthController {
     private static final Pattern LOGIN_NAME = Pattern.compile("[\\p{L}\\p{N}._-]{3,32}");
     private static final int PASSWORD_MIN = 8;
     private static final int PASSWORD_MAX = 64;
-    private static final String BAD_CREDENTIALS = "账号或口令不对。再试三次会冷十分钟。";
+    private static final String BAD_CREDENTIALS = "账号或密码不对。再试三次会冷十分钟。";
 
     private final AccountService account;
     private final LoginGuard guard;
@@ -102,13 +102,13 @@ public class PasswordAuthController {
     private static String passwordOf(JsonNode body) {
         String raw = JsonUtil.text(body, "password");
         if (raw == null) {
-            throw new ApiException(400, "要填口令。");
+            throw new ApiException(400, "要填密码。");
         }
         if (raw.length() < PASSWORD_MIN || raw.length() > PASSWORD_MAX) {
-            throw new ApiException(400, "口令要 " + PASSWORD_MIN + "–" + PASSWORD_MAX + " 个字符。");
+            throw new ApiException(400, "密码要 " + PASSWORD_MIN + "–" + PASSWORD_MAX + " 个字符。");
         }
         if (raw.chars().allMatch(Character::isDigit)) {
-            throw new ApiException(400, "口令不能全是数字。");
+            throw new ApiException(400, "密码不能全是数字。");
         }
         return raw;
     }
